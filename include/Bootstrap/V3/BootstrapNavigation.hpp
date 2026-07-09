@@ -29,6 +29,8 @@ public:
 
         NavigationModule::Utilities::LocationSources().push_back(&GpsLocatorAndClock());
         NavigationModule::Utilities::LocationSources().push_back(&StaticLocationSource());
+
+        NavigationManagerInstance().StartLocationPolling(); // 15s interval, 60s max-age
     }
 
     static NavigationManager &NavigationManagerInstance()

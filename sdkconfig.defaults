@@ -20,6 +20,11 @@ CONFIG_FMB_COMM_MODE_RTU_EN=n
 CONFIG_FMB_COMM_MODE_ASCII_EN=y
 CONFIG_FMB_CONTROLLER_SLAVE_ID_SUPPORT=n
 CONFIG_FMB_MDNS_INTEGRATION_ENABLE=n
+# esp-modbus master timeouts: the component has a _Static_assert requiring
+# MAX_API_BLOCKING_TIME_MS >= TIMEOUT_MS_RESPOND. Pin both to the same value so
+# a config regeneration can't reintroduce an invalid combination.
+CONFIG_FMB_MASTER_TIMEOUT_MS_RESPOND=10000
+CONFIG_FMB_MASTER_MAX_API_BLOCKING_TIME_MS=10000
 
 # Disable IPV6 and set a custom hostname.
 CONFIG_LWIP_IPV6=n

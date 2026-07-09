@@ -36,70 +36,49 @@ namespace DisplayModule
             // Calibration-prompt text state
             _promptState = std::make_shared<TextDisplayState>();
             {
-                auto promptPayload = std::make_shared<ArduinoJson::JsonDocument>();
-                auto arr = (*promptPayload)["txtLines"].to<ArduinoJson::JsonArray>();
-                auto obj = arr.add<ArduinoJson::JsonObject>();
-                obj["text"]   = "Start compass calibration?";
-                obj["hAlign"] = static_cast<int>(TextAlignH::CENTER);
-                obj["vAlign"] = static_cast<int>(TextAlignV::CENTER);
-                // TextDisplayState reads this payload in onEnter
-                // We store it to be pushed with payload when entering prompt
-                _promptPayload = promptPayload;
+                std::vector<TextDrawData> promptText;
+                promptText.emplace_back("Calibration:", TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 1 });
+                promptText.emplace_back("Rotate the device", TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 2 });
+                promptText.emplace_back("slowly in all axes", TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 3 });
+                promptText.emplace_back("until numbers", TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 4 });
+                promptText.emplace_back("stabilize", TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 5 });
+                _promptState->setLines(promptText);
             }
 
             // Wire adjacent state references
             _debugState->setAdjacentState(InputID::BUTTON_4, _promptState);
             _promptState->setAdjacentState(InputID::BUTTON_4, _calibrateState);
 
-            // BUTTON_3 in debug state — pop window
-            registerInput(InputID::BUTTON_3, "Back");
-            addInputCommand(InputID::BUTTON_3,
-                [this](const InputContext &ctx)
-                {
-                    if (_currentState == _debugState)
-                        Utilities::popWindow();
-                    else if (_currentState == _promptState)
-                        switchState(_debugState);
-                    else if (_currentState == _calibrateState)
-                        switchState(_debugState);
-                });
+            _debugState->bindInput(InputID::BUTTON_3, "Back", [this](const InputContext &ctx)
+            {
+                Utilities::popWindow();
+            });
+            _debugState->bindInput(InputID::BUTTON_4, "Calibrate", [this](const InputContext &ctx)
+            {
+                pushState(_promptState);
+            });
 
-            // BUTTON_4 in debug state — enter calibration prompt
-            registerInput(InputID::BUTTON_4, "Calibrate");
-            addInputCommand(InputID::BUTTON_4,
-                [this](const InputContext &ctx)
-                {
-                    if (_currentState == _debugState)
-                    {
-                        StateTransferData d;
-                        d.payload = _promptPayload;
-                        pushState(_promptState, d);
-                    }
-                    else if (_currentState == _promptState)
-                    {
-                        // "Yes" — enter calibration
-                        switchState(_calibrateState);
-                    }
-                });
+            _promptState->bindInput(InputID::BUTTON_3, "Back", [this](const InputContext &ctx)
+            {
+                popState();
+            });
+            _promptState->bindInput(InputID::BUTTON_4, "Start", [this](const InputContext &ctx)
+            {
+                pushState(_calibrateState);
+            });
+
+            _calibrateState->bindInput(InputID::BUTTON_3, "Done", [this](const InputContext &ctx)
+            {
+                popState();
+            });
 
             setInitialState(_debugState);
-        }
-
-        void onTick() override
-        {
-            Window::onTick(); // dispatches to the current state
-
-            if (_currentState == _calibrateState && _calibrateState->isDone())
-            {
-                switchState(_debugState);
-            }
         }
 
     private:
         std::shared_ptr<CompassDebugState>     _debugState;
         std::shared_ptr<TextDisplayState>      _promptState;
         std::shared_ptr<CompassCalibrateState> _calibrateState;
-        std::shared_ptr<ArduinoJson::JsonDocument> _promptPayload;
     };
 
 } // namespace DisplayModule
