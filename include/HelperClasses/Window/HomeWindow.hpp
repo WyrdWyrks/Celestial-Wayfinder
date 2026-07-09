@@ -439,15 +439,17 @@ namespace DisplayModule
                 
                 if (selectedKey == "Message")
                 {
-                    auto msg = _viewMessageState->currentMessage();
-                    auto pingMsg = std::static_pointer_cast<PingMessage>(msg);
+                    ESP_LOGI(TAG, "Selected 'Message' for saving");
+                    auto pingMsg = _viewMessageState->currentMessage();
 
+                    ESP_LOGI(TAG, "Saving message: %s", pingMsg->status.c_str());
                     WayfinderLoraState::AddSavedMessage(pingMsg->status);
-                    popState(); 
+                     
                     auto &drawCtx = Utilities::drawContext();
                     drawCtx.display->fillScreen(BLACK);
                     auto successMsg = TextDrawCommand("Message saved", TextFormat{TextAlignH::CENTER, TextAlignV::CENTER});
                     successMsg.draw(drawCtx);
+                    popState();
                     Utilities::onRenderComplete();
                     vTaskDelay(pdMS_TO_TICKS(2000));
                 }
@@ -462,12 +464,13 @@ namespace DisplayModule
                     loc.Longitude = pingMsg->lng;
 
                     NavigationUtils::AddSavedLocation(loc, true);
-                    popState(); 
+                    
                     auto &drawCtx = Utilities::drawContext();
                     drawCtx.display->fillScreen(BLACK);
                     auto successMsg = TextDrawCommand("Location saved", TextFormat{TextAlignH::CENTER, TextAlignV::CENTER});
                     successMsg.draw(drawCtx);
                     Utilities::onRenderComplete();
+                    popState();
                     vTaskDelay(pdMS_TO_TICKS(2000));
                 }
 

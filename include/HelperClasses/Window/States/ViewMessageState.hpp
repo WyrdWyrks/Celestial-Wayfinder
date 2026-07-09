@@ -69,7 +69,6 @@ namespace DisplayModule
         void onExit() override
         {
             LED_Utils::disablePattern(_ringPointId);
-            _cachedPing = nullptr;
             _userIds.clear();
             _currIndex = 0;
         }
@@ -94,7 +93,7 @@ namespace DisplayModule
         }
 
         // Returns the currently displayed message (may be nullptr if list is empty).
-        std::shared_ptr<LoraModule::LoraMessageInterface> currentMessage() const
+        std::shared_ptr<PingMessage> currentMessage() const
         {
             return _cachedPing;
         }

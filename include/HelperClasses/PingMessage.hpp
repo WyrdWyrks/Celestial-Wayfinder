@@ -6,7 +6,7 @@ class PingMessage : public LoraModule::LoraMessageInterface
 {
 public:
     static constexpr const char* TAG = "PingMessage";
-    static constexpr size_t STATUS_LENGTH = 23;
+    static constexpr size_t STATUS_LENGTH = 21;
 
     static constexpr const char* KEY_SENDER_NAME = "n";
     static constexpr const char* KEY_COLOR_R     = "r";
