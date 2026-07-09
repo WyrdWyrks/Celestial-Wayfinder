@@ -322,12 +322,14 @@ private:
     {
         if (_magType == MagnetometerV3Type::MMC5603)
         {
-            _xMin = -27.78f;
-            _xMax = 66.00f;
-            _yMin = -114.31f;
-            _yMax = -12.05f;
-            _zMin = -66.80f;
-            _zMax = 33.04f;
+            _xMin = -44.03f;
+            _xMax = 58.56f;
+            _yMin = -123.86f;
+            _yMax = -20.79f;
+            _zMin = -34.01f;
+            _zMax = 69.21f;
+
+            _IsCalibrated = true;
         }
         else if (_magType == MagnetometerV3Type::BMM350)
         {
@@ -337,6 +339,8 @@ private:
             _yMax = 74.38f;
             _zMin = -98.16f;
             _zMax = -0.71f;
+
+            _IsCalibrated = true;
         }
     }
 
@@ -344,6 +348,9 @@ private:
     {
         if (_IsCalibrated)
         {
+            ESP_LOGV(TAG_COMPASS_V3, "Adjusting mag reading with calibration data: X[%.2f,%.2f] Y[%.2f,%.2f] Z[%.2f,%.2f]",
+                _xMin, _xMax, _yMin, _yMax, _zMin, _zMax);
+                
             x -= (_xMin + _xMax) / 2.0f;
             y -= (_yMin + _yMax) / 2.0f;
             z -= (_zMin + _zMax) / 2.0f;

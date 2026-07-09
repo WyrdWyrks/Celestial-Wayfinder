@@ -148,7 +148,7 @@ public:
         {
             char devicenamebuffer[20];
             FilesystemModule::Utilities::DeviceInfo().begin("DeviceInfo", true);
-            sprintf(devicenamebuffer, "Beacon_%04X", FilesystemModule::Utilities::DeviceInfo().getUInt("UserID") & 0xFFFF);
+            sprintf(devicenamebuffer, "Beacon_%04X", (unsigned int)(FilesystemModule::Utilities::DeviceInfo().getUInt("UserID") & 0xFFFF));
             FilesystemModule::Utilities::DeviceInfo().end();
             defaultDeviceName = devicenamebuffer;
         }

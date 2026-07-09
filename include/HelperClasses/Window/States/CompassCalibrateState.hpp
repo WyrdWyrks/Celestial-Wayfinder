@@ -2,39 +2,36 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include "WindowState.hpp"
 #include "DisplayUtilities.hpp"
 #include "TextDrawCommand.hpp"
 #include "NavigationUtils.h"
 #include "FilesystemUtils.h"
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 namespace DisplayModule
 {
     // -------------------------------------------------------------------------
     // CompassCalibrateState
     // -------------------------------------------------------------------------
-    // Runs a timed compass calibration routine.
+    // Runs a compass calibration routine until the user exits manually.
     //
     // Behaviour:
-    //   - onEnter: starts NavigationUtils calibration, resets the countdown.
+    //   - onEnter: starts NavigationUtils calibration.
     //   - refreshIntervalMs: returns REFRESH_RATE_MS so the display ticks.
-    //   - Each tick (via ContentLayer redraw): iterates calibration,
-    //     decrements the timer, redraws the countdown.  When the timer
-    //     expires the state calls win.popState() to return automatically.
+    //   - Each tick (via ContentLayer redraw): iterates calibration and
+    //     redraws the live X/Y/Z min/max calibration ranges so the user can
+    //     watch the values converge.
     //   - onExit: ends calibration, saves data to SPIFFS via FilesystemModule.
     //
-    // The owning Window must wire at least BUTTON_3 (Back) if early exit is
-    // desired.  The state exits automatically when the timer expires.
+    // The owning Window must wire BUTTON_3 (Cancel) to pop the state — there
+    // is no automatic timeout; the user decides when calibration is complete.
     //
     // Draw update strategy:
     //   Because refreshIntervalMs() returns a non-zero value, Utilities will
-    //   call Utilities::render() on a timer rather than only on input.
-    //   Each call to draw() on ContentLayer re-executes the stored draw
-    //   commands — but we need to iterate the calibration *and* update the
-    //   countdown text each frame.  We therefore use a single dynamic
-    //   TextDrawCommand whose text is updated each tick via onTick().
+    //   call Utilities::render() on a timer rather than only on input.  Each
+    //   tick iterates the calibration and rebuilds the draw commands with the
+    //   latest calibration data (mirrors CompassDebugState's readout).
     //
     //   The owning Window (or Manager) should call onTick() each time the
     //   display refresh fires.  Alternatively, override this class and update
@@ -48,7 +45,6 @@ namespace DisplayModule
     {
     public:
         static constexpr uint32_t REFRESH_RATE_MS   = 30;
-        static constexpr uint32_t TOTAL_TIME_MS     = 10000;
 
         CompassCalibrateState()
         {
@@ -63,11 +59,6 @@ namespace DisplayModule
         void onEnter(const StateTransferData &) override
         {
             NavigationUtils::BeginCalibration();
-
-            _timerMs    = static_cast<int32_t>(TOTAL_TIME_MS);
-            _lastTickMs = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            _done       = false;
-
             _rebuildDrawCommands();
         }
 
@@ -83,9 +74,7 @@ namespace DisplayModule
 
             WindowState::onExit(); // clears draw commands
         }
-
-        bool isDone() const { return _done; }
-
+        
         // ------------------------------------------------------------------
         // Per-tick update — called automatically by Window::onTick()
         // ------------------------------------------------------------------
@@ -93,46 +82,60 @@ namespace DisplayModule
         void onTick() override
         {
             NavigationUtils::IterateCalibration();
-
-            uint32_t nowMs   = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            uint32_t deltaMs = nowMs - _lastTickMs;
-            _lastTickMs      = nowMs;
-
-            _timerMs -= static_cast<int32_t>(deltaMs);
-
-            if (_timerMs <= 0)
-            {
-                _done = true;
-                return;
-            }
-
             _rebuildDrawCommands();
         }
 
     private:
-        int32_t  _timerMs    = 0;
-        uint32_t _lastTickMs = 0;
-        bool     _done       = false;
-
         void _rebuildDrawCommands()
         {
             clearDrawCommands();
 
-            // "Calibrating..." label — line 2
+            auto displayLine  = 1;
+            auto displayLines = Utilities::selectBottomTextLine();
+
+            // "Calibrating..." label
             addDrawCommand(std::make_shared<TextDrawCommand>(
                 "Calibrating...",
-                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 2 }
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
             ));
 
-            // Countdown in whole seconds — line 3
-            char buf[12];
-            int  secsRemaining = (_timerMs / 1000) + 1;
-            snprintf(buf, sizeof(buf), "%d", secsRemaining);
+            if (displayLines < 4)
+            {
+                return; // not enough lines for the header + X/Y/Z rows
+            }
 
+            JsonDocument calibrationData;
+            NavigationUtils::GetCalibrationData(calibrationData);
+
+            std::string xCalStr = formatCalRow("X", calibrationData["xMin"].as<float>(), calibrationData["xMax"].as<float>());
+            displayLine++;
             addDrawCommand(std::make_shared<TextDrawCommand>(
-                std::string(buf),
-                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, 3 }
+                xCalStr,
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
             ));
+
+            std::string yCalStr = formatCalRow("Y", calibrationData["yMin"].as<float>(), calibrationData["yMax"].as<float>());
+            displayLine++;
+            addDrawCommand(std::make_shared<TextDrawCommand>(
+                yCalStr,
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
+            ));
+
+            std::string zCalStr = formatCalRow("Z", calibrationData["zMin"].as<float>(), calibrationData["zMax"].as<float>());
+            displayLine++;
+            addDrawCommand(std::make_shared<TextDrawCommand>(
+                zCalStr,
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
+            ));
+        }
+
+        static std::string formatCalRow(const char* axis, float minVal, float maxVal) {
+            char buf[32];
+            for (int prec = 2; prec >= 0; --prec) {
+                snprintf(buf, sizeof(buf), "%s: [%.*f, %.*f]", axis, prec, minVal, prec, maxVal);
+                if (strlen(buf) <= 21) break;
+            }
+            return std::string(buf);
         }
     };
 
