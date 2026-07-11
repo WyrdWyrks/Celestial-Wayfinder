@@ -25,8 +25,8 @@ public:
         System_Utils::TimeSources().push_back(&GpsLocatorAndClock());
         System_Utils::TimeSources().push_back(ezTime);
 
-        NavigationModule::Utilities::LocationSources().push_back(&GpsLocatorAndClock());
-        NavigationModule::Utilities::LocationSources().push_back(&StaticLocationSource());
+        NavigationModule::Utilities::RegisterLocationSource(&GpsLocatorAndClock());
+        NavigationModule::Utilities::RegisterLocationSource(&StaticLocationSource());
 
         NavigationManagerInstance().StartLocationPolling(); // 15s interval, 60s max-age
     }
