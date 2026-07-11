@@ -30,7 +30,7 @@
 #if HARDWARE_VERSION >= 3
     #include "HelperClasses/Window/BreakoutWindow.hpp"
 #endif
-#include "GpsWindow.hpp"
+#include "GeolocationDebugWindow.hpp"
 #include "DiagnosticsWindow.hpp"
 #include "EditSavedLocationsWindow.hpp"
 #include "HelperClasses/Window/EditStatusMessagesWindow.hpp"
@@ -374,10 +374,10 @@ public:
             auto compassWindow = std::make_shared<DisplayModule::CompassWindow>();
             DisplayModule::Utilities::pushWindow(compassWindow);
         }));
-        menuItems.push_back(DisplayModule::MenuItem("Debug GPS", []()
+        menuItems.push_back(DisplayModule::MenuItem("Debug Geolocation", []()
         {
-            auto gpsWindow = std::make_shared<DisplayModule::GpsWindow>();
-            DisplayModule::Utilities::pushWindow(gpsWindow);
+            auto geolocationDebugWindow = std::make_shared<DisplayModule::GeolocationDebugWindow>();
+            DisplayModule::Utilities::pushWindow(geolocationDebugWindow);
         }));
         menuItems.push_back(DisplayModule::MenuItem("Diagnostic Info", []()
         {
