@@ -4,7 +4,7 @@
 shares your GPS location and short status messages over a **LoRa mesh** — no cell network required — and
 points you toward other users (or saved waypoints) with an **LED compass ring**.
 
-![The Celestial Wayfinder](https://hackster.imgix.net/uploads/attachments/1671493/_zM7FUV5gcx.blob?auto=compress%2Cformat&w=900&h=675&fit=min)
+![The Celestial Wayfinder](https://wyrdwyrks.com/celestial-wayfinder/gallery/device.png)
 
 This repository is the **application / firmware layer**. Nearly all of the reusable machinery — display
 stack, LED engine, LoRa mesh, navigation, settings, RPC — lives in the companion
@@ -31,13 +31,10 @@ run directly from 5 V.
 
 | | |
 |---|---|
-| ![128xN OLED home screen](https://hackster.imgix.net/uploads/attachments/1669921/oled_kk2vDHTSdD.jpg?auto=compress%2Cformat&w=740&h=555&fit=max) | A monochrome OLED shows the home screen and menus (128×32 on v1, 128×64 on v2, 128×128 SH1107 on v3). |
-| ![LED compass ring](https://hackster.imgix.net/uploads/attachments/1669927/led_compass_0YRWSKrjx6.jpg?auto=compress%2Cformat&w=740&h=555&fit=max) | A ring of WS2812B LEDs is the compass display, pointing toward a target bearing. |
-| ![LED flashlight](https://hackster.imgix.net/uploads/attachments/1669945/led_flashlight_Hl6dHK2f0o.jpg?auto=compress%2Cformat&w=740&h=555&fit=max) | The LED array doubles as a flashlight. |
+| ![128xN OLED home screen](https://wyrdwyrks.com/celestial-wayfinder/gallery/home-screen.jpg) | A monochrome OLED shows the home screen and menus (128×32 on v1, 128×64 on v2, 128×128 SH1107 on v3). |
+| ![LED compass ring](https://wyrdwyrks.com/celestial-wayfinder/gallery/navigation.jpg) | A ring of WS2812B LEDs is the compass display, pointing toward a target bearing. |
 
 ### Radio
-
-![LoRa radio](https://hackster.imgix.net/uploads/attachments/1669970/antenna_LBvCVSCt8A.jpg?auto=compress%2Cformat&w=740&h=555&fit=max)
 
 A LoRa radio (SX127x-class, 915 MHz) sends and receives packets carrying GPS coordinates and status
 messages between users, forming an ad-hoc mesh.

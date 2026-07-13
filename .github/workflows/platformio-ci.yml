@@ -19,7 +19,7 @@ jobs:
       # Also checkout esp-utilities repo
       - uses: actions/checkout@v4
         with:
-          repository: Blake-Ballew/esp32-utilities
+          repository: WyrdWyrks/esp32-utilities
           path: ./esp32-utilities
       
       - uses: actions/cache@v4
