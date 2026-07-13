@@ -19,6 +19,15 @@ class BootstrapMicrocontroller
 {
 public:
 
+    constexpr static uint8_t ENC_A = 23;
+    constexpr static uint8_t ENC_B = 2;
+
+    constexpr static uint8_t BUTTON_1_PIN = 5;
+    constexpr static uint8_t BUTTON_2_PIN = 26;
+    constexpr static uint8_t BUTTON_3_PIN = 19;
+    constexpr static uint8_t BUTTON_4_PIN = 34;
+    constexpr static uint8_t BUTTON_SOS_PIN = 25;
+
     constexpr static uint8_t CPU_CORE_LORA = 1;
     constexpr static uint8_t CPU_CORE_APP = 0;
 
@@ -83,6 +92,24 @@ public:
             if (mv >= 1600) return      (long)(mv - 1600) * 10 / 150;
             return 0;
         });
+    }
+
+    static void EnableInterrupts()
+    {
+        attachInterrupt(BUTTON_1_PIN, button1ISR, FALLING);
+        attachInterrupt(BUTTON_2_PIN, button2ISR, FALLING);
+        attachInterrupt(BUTTON_3_PIN, button3ISR, FALLING);
+        attachInterrupt(BUTTON_4_PIN, button4ISR, FALLING);
+        inputEncoder->resumeCount();
+    }
+
+    static void DisableInterrupts()
+    {
+        detachInterrupt(BUTTON_1_PIN);
+        detachInterrupt(BUTTON_2_PIN);
+        detachInterrupt(BUTTON_3_PIN);
+        detachInterrupt(BUTTON_4_PIN);
+        inputEncoder->pauseCount();
     }
 
     static TwoWire &I2cBus()

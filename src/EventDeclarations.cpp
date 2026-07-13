@@ -96,6 +96,27 @@ void IRAM_ATTR button4ISR()
     }
 }
 
+void IRAM_ATTR encButtonISR()
+{
+    static TickType_t lastISRTime = 0;
+    if (xTaskGetTickCount() - lastISRTime < DEBOUNCE_TIME_BUTTONS)
+    {
+        return;
+    }
+
+    lastISRTime = xTaskGetTickCount();
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    DisplayModule::DisplayCommandQueueItem command;
+    command.commandType = DisplayModule::CommandType::INPUT_COMMAND;
+    command.commandData.inputCommand.inputID = DisplayModule::InputID::ENC_BUTTON;
+    xQueueSendFromISR(displayCommandQueue, &command, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken)
+    {
+        portYIELD_FROM_ISR();
+    }
+}
+
 // void IRAM_ATTR buttonSOSISR()
 // {
 //     static TickType_t lastISRTime = 0;

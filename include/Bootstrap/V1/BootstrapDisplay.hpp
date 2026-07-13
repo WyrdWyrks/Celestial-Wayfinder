@@ -14,6 +14,9 @@ class BootstrapDisplay
 {
 public:
 
+    static constexpr uint16_t OLED_WIDTH = 128;
+    static constexpr uint16_t OLED_HEIGHT = 32;
+
     static void Inititalize()
     {
         // Initialize Driver
