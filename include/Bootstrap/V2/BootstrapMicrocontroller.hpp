@@ -6,7 +6,6 @@
 
 #include "EventDeclarations.h"
 #include "CompassUtils.h"
-#include "globalDefines.h"
 #include "SystemUtilities.hpp"
 
 #define BUZZER_PIN 4

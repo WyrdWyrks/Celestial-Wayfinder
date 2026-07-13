@@ -6,7 +6,6 @@
 #include "esp_log.h"
 #include "EventDeclarations.h"
 #include <ESP32Encoder.h>
-#include "globalDefines.h"
 
 #include <ArduinoJson.hpp>
 

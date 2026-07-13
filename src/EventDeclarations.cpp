@@ -1,6 +1,5 @@
 #include "EventDeclarations.h"
 #include "HelperClasses/LoRaDriver/ArduinoLoRaDriver.h"
-#include "globalDefines.h"
 #include "LED_Manager.h"
 #include "Display_Manager.h"
 #include "esp_log.h"

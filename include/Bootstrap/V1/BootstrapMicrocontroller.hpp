@@ -6,7 +6,6 @@
 
 #include "EventDeclarations.h"
 #include "CompassUtils.h"
-#include "globalDefines.h"
 #include "LED_Manager.h"
 #include "SystemUtilities.hpp"
 
