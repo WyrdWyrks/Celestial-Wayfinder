@@ -6,7 +6,6 @@
 
 #include "EventDeclarations.h"
 #include "CompassUtils.h"
-#include "globalDefines.h"
 #include "SystemUtilities.hpp"
 #include "WiFi.h"
 #include <BQ25672.h>
@@ -24,6 +23,18 @@ class BootstrapMicrocontroller
 {
 public:
 
+    constexpr static uint8_t ENC_A = 10;
+    constexpr static uint8_t ENC_B = 9;
+
+    constexpr static uint8_t BUTTON_1_PIN = 13;
+    constexpr static uint8_t BUTTON_2_PIN = 3;
+    constexpr static uint8_t BUTTON_3_PIN = 12;
+    constexpr static uint8_t BUTTON_4_PIN = 11;
+    // Currently unused. Will be reused for modules at some point
+    constexpr static uint8_t BUTTON_SOS_PIN = 8;
+
+    constexpr static uint8_t ENC_BUTTON_PIN = 21;
+
     constexpr static uint8_t CPU_CORE_LORA = 1;
     constexpr static uint8_t CPU_CORE_APP = 0;
 
@@ -40,6 +51,7 @@ public:
         pinMode(BUTTON_2_PIN, INPUT_PULLUP);
         pinMode(BUTTON_3_PIN, INPUT_PULLUP);
         pinMode(BUTTON_4_PIN, INPUT_PULLUP);
+        pinMode(ENC_BUTTON_PIN, INPUT_PULLUP);
         // TODO: Add encoder button
 
         pinMode(BUZZER_PIN, OUTPUT);
@@ -119,6 +131,26 @@ public:
             if (mv >= 3200) return      (long)(mv - 3200) * 10 / 300;
             return 0;
         });
+    }
+
+    static void EnableInterrupts()
+    {
+        attachInterrupt(BUTTON_1_PIN, button1ISR, FALLING);
+        attachInterrupt(BUTTON_2_PIN, button2ISR, FALLING);
+        attachInterrupt(BUTTON_3_PIN, button3ISR, FALLING);
+        attachInterrupt(BUTTON_4_PIN, button4ISR, FALLING);
+        attachInterrupt(ENC_BUTTON_PIN, encButtonISR, FALLING);
+        inputEncoder->resumeCount();
+    }
+
+    static void DisableInterrupts()
+    {
+        detachInterrupt(BUTTON_1_PIN);
+        detachInterrupt(BUTTON_2_PIN);
+        detachInterrupt(BUTTON_3_PIN);
+        detachInterrupt(BUTTON_4_PIN);
+        detachInterrupt(ENC_BUTTON_PIN);
+        inputEncoder->pauseCount();
     }
 
     static TwoWire &I2cBus()

@@ -35,6 +35,7 @@ void IRAM_ATTR button1ISR();
 void IRAM_ATTR button2ISR();
 void IRAM_ATTR button3ISR();
 void IRAM_ATTR button4ISR();
+void IRAM_ATTR encButtonISR();
 // void IRAM_ATTR buttonSOSISR();
 void IRAM_ATTR enc_cb(void *arg);
 void IRAM_ATTR CompassDRDYISR();

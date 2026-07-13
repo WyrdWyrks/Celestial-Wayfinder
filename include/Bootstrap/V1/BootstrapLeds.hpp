@@ -1,7 +1,5 @@
 #pragma once
 
-#include "globalDefines.h"
-
 #include "FastLED.h"
 
 #include "LedPatternInterface.hpp"
@@ -120,7 +118,6 @@ public:
                 DisplayModule::InputID::BUTTON_2,
                 DisplayModule::InputID::BUTTON_3,
                 DisplayModule::InputID::BUTTON_4,
-                BUTTON_SOS,
                 DisplayModule::InputID::ENC_UP,
                 DisplayModule::InputID::ENC_DOWN
             });
@@ -136,7 +133,6 @@ public:
                 DisplayModule::InputID::BUTTON_2,
                 DisplayModule::InputID::BUTTON_3,
                 DisplayModule::InputID::BUTTON_4,
-                BUTTON_SOS,
                 DisplayModule::InputID::ENC_UP,
                 DisplayModule::InputID::ENC_DOWN
             });

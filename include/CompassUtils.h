@@ -20,7 +20,6 @@
 #include "HelperClasses/WayfinderLoraState.hpp"
 
 #include "ArduinoJson.h"
-#include "globalDefines.h"
 #include "esp_log.h"
 
 // Window Includes

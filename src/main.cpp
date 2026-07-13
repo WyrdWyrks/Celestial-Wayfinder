@@ -6,7 +6,6 @@
 #include "esp_log.h"
 #include "EventDeclarations.h"
 #include <ESP32Encoder.h>
-#include "globalDefines.h"
 
 #include <ArduinoJson.hpp>
 
@@ -74,8 +73,8 @@ void setup()
 
   // vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-  System_Utils::getEnableInterrupts() += enableInterruptsHandler;
-  System_Utils::getDisableInterrupts() += disableInterruptsHandler;
+  System_Utils::getEnableInterrupts() += BootstrapMicrocontroller::EnableInterrupts;
+  System_Utils::getDisableInterrupts() += BootstrapMicrocontroller::DisableInterrupts;
 
   System_Utils::enableInterruptsInvoke();
 
@@ -84,26 +83,6 @@ void setup()
 void loop()
 {
   vTaskDelay(600000 / portTICK_PERIOD_MS);
-}
-
-void enableInterruptsHandler() 
-{
-  // attachInterrupt(BUTTON_SOS_PIN, buttonSOSISR, FALLING);
-  attachInterrupt(BUTTON_1_PIN, button1ISR, FALLING);
-  attachInterrupt(BUTTON_2_PIN, button2ISR, FALLING);
-  attachInterrupt(BUTTON_3_PIN, button3ISR, FALLING);
-  attachInterrupt(BUTTON_4_PIN, button4ISR, FALLING);
-  inputEncoder->resumeCount();
-}
-
-void disableInterruptsHandler() 
-{
-  detachInterrupt(BUTTON_SOS_PIN);
-  detachInterrupt(BUTTON_1_PIN);
-  detachInterrupt(BUTTON_2_PIN);
-  detachInterrupt(BUTTON_3_PIN);
-  detachInterrupt(BUTTON_4_PIN); 
-  inputEncoder->pauseCount();
 }
 
 void enterUselessLoop()
