@@ -6,6 +6,7 @@
 #include "WindowState.hpp"
 #include "DisplayUtilities.hpp"
 #include "../../DrawCommands/LineCompassDrawCommand.hpp"
+#include "RingPoint.hpp"
 #include "LoraUtils.h"
 #include "HelperClasses/WayfinderLoraState.hpp"
 #include "HelperClasses/PingMessage.hpp"

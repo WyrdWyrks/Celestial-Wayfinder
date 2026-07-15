@@ -2,7 +2,6 @@
 
 #include "Window.hpp"
 #include "States/HomeState.hpp"
-#include "States/TrackingState.hpp"
 #include "States/SelectMessageState.hpp"
 #include "States/SelectLocationState.hpp"
 #include "States/SelectKeyValueState.hpp"
