@@ -8,6 +8,7 @@
 #include "NavigationManager.h"
 #include "GpsSource.hpp"
 #include "StaticLocation.hpp"
+#include "WiFiGeolocator.hpp"
 #include "EzTimeSource.hpp"
 #include "NavigationUtils.h"
 
@@ -28,6 +29,7 @@ public:
         System_Utils::TimeSources().push_back(ezTime);
 
         NavigationModule::Utilities::RegisterLocationSource(&GpsLocatorAndClock());
+        NavigationModule::Utilities::RegisterLocationSource(&WiFiGeolocatorSource());
         NavigationModule::Utilities::RegisterLocationSource(&StaticLocationSource());
 
         NavigationManagerInstance().StartLocationPolling(); // 15s interval, 60s max-age
@@ -51,6 +53,12 @@ public:
     {
         static NavigationModule::GpsSource gpsLocatorAndClock(NavigationModule::Utilities::GetGPS(), Serial2);
         return gpsLocatorAndClock;
+    }
+
+    static NavigationModule::WiFiGeolocator &WiFiGeolocatorSource()
+    {
+        static NavigationModule::WiFiGeolocator wifiGeolocatorSource;
+        return wifiGeolocatorSource;
     }
 
     static NavigationModule::StaticLocation &StaticLocationSource()

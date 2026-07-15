@@ -358,12 +358,12 @@ public:
         }));
         // #endif
 
-        menuItems.push_back(DisplayModule::MenuItem("Edit Status Messages", []()
+        menuItems.push_back(DisplayModule::MenuItem("Status Messages", []()
         {
             auto editStatusMessagesWindow = std::make_shared<DisplayModule::EditStatusMessagesWindow>();
             DisplayModule::Utilities::pushWindow(editStatusMessagesWindow);
         }));
-        menuItems.push_back(DisplayModule::MenuItem("Edit Saved Locations", []()
+        menuItems.push_back(DisplayModule::MenuItem("Saved Locations", []()
         {
             auto editSavedLocationsWindow = std::make_shared<DisplayModule::EditSavedLocationsWindow>();
             DisplayModule::Utilities::pushWindow(editSavedLocationsWindow);
