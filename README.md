@@ -148,7 +148,7 @@ name, theme color (RGB), latitude/longitude, and a short status string. Its sche
 of its sorted payload keys (`"abgnors"`), and it's registered with the library's message factory so
 incoming packets deserialize polymorphically.
 [`WayfinderLoraState`](include/HelperClasses/WayfinderLoraState.hpp) tracks **unread messages**
-(thread-safe, mutex-guarded) and the user's **saved status-message list** (persisted to SPIFFS), and
+(thread-safe, mutex-guarded) and the user's **saved status-message list** (persisted to LittleFS), and
 exposes RPC handlers for both.
 
 ### Display & UI

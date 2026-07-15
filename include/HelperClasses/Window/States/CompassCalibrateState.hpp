@@ -22,7 +22,7 @@ namespace DisplayModule
     //   - Each tick (via ContentLayer redraw): iterates calibration and
     //     redraws the live X/Y/Z min/max calibration ranges so the user can
     //     watch the values converge.
-    //   - onExit: ends calibration, saves data to SPIFFS via FilesystemModule.
+    //   - onExit: ends calibration, saves data to LittleFS via FilesystemModule.
     //
     // The owning Window must wire BUTTON_3 (Cancel) to pop the state — there
     // is no automatic timeout; the user decides when calibration is complete.
