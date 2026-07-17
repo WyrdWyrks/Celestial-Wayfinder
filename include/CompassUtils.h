@@ -36,6 +36,8 @@
 #include "HelperClasses/Window/WiFiRpcWindow.hpp"
 #include "HelperClasses/Window/PairBluetoothWindow.hpp"
 
+#include "WiFiLocationLookup.hpp"
+
 static const char *TAG_COMPASS = "COMPASS";
 
 namespace
@@ -147,7 +149,7 @@ public:
         {
             char devicenamebuffer[20];
             FilesystemModule::Utilities::DeviceInfo().begin("DeviceInfo", true);
-            sprintf(devicenamebuffer, "Beacon_%04X", (unsigned int)(FilesystemModule::Utilities::DeviceInfo().getUInt("UserID") & 0xFFFF));
+            sprintf(devicenamebuffer, "Wayfinder_%04X", (unsigned int)(FilesystemModule::Utilities::DeviceInfo().getUInt("UserID") & 0xFFFF));
             FilesystemModule::Utilities::DeviceInfo().end();
             defaultDeviceName = devicenamebuffer;
         }
@@ -316,6 +318,9 @@ public:
         // System
         RpcModule::Utilities::RegisterRpc("RestartSystem", [](JsonDocument &_) { ESP.restart();  vTaskDelay(1000 / portTICK_PERIOD_MS); });
         RpcModule::Utilities::RegisterRpc("GetSystemInfo", System_Utils::GetSystemInfoRpc);
+
+        // Wifi Geolocation
+        NavigationModule::WifiGeoDb::RegisterRpcs();
     }
 
     static void ClearLocations(uint8_t inputID)

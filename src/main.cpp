@@ -59,6 +59,12 @@ void Bootstrap();
 
 void setup()
 {
+  // Must be called before begin(): the RPC serial channel reads whole
+  // lines (up to a few KB for chunked binary uploads like the WiFi geo DB),
+  // but the RPC poll loop only drains the UART every ~100ms. The default
+  // 256-byte ring buffer overflows well before that, silently corrupting
+  // any line over ~256 bytes with no error on either side.
+  Serial.setRxBufferSize(8192);
   Serial.begin(115200);
   vTaskDelay(pdMS_TO_TICKS(3000));
 
