@@ -20,23 +20,20 @@ namespace DisplayModule
             WiFi.disconnect();
             delay(100);
 
-            auto scan = WiFi.scanNetworks();
-            ESP_LOGI("WiFiRpcWindow", "Found %d networks", scan);
-
-            // if (useApMode)
-            // {
-            //     _initWiFiAp();
-            // }
-            // else
-            // {
-            //     _initWiFiSta();
-            // }
+            if (useApMode)
+            {
+                _initWiFiAp();
+            }
+            else
+            {
+                _initWiFiSta();
+            }
             _buildDrawCommands();
 
             _state->bindInput(InputID::BUTTON_3, "Back",
                 [](const InputContext &) { Utilities::popWindow(); });
 
-            // _state->refreshIntervalMs = 5000; // Refresh every 5 seconds to update IP address, etc.
+            _state->refreshIntervalMs = 5000; // Refresh every 5 seconds to update IP address, etc.
 
             setInitialState(_state);
         }
@@ -91,14 +88,14 @@ namespace DisplayModule
 
         void _buildDrawCommands()
         {
-            // if (_useApMode)
-            // {
-            //     _buildApModeDrawCommands();
-            // }
-            // else
-            // {
-            //     _buildStaModeDrawCommands();
-            // }
+            if (_useApMode)
+            {
+                _buildApModeDrawCommands();
+            }
+            else
+            {
+                _buildStaModeDrawCommands();
+            }
         }
 
         void _buildApModeDrawCommands()
