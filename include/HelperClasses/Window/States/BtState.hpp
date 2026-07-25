@@ -5,7 +5,6 @@
 #include "BluetoothUtilities.hpp"
 
 #include "esp_task_wdt.h"
-#include <nvs_flash.h>
 
 
 namespace DisplayModule
@@ -37,9 +36,8 @@ namespace DisplayModule
             refreshIntervalMs = REFRESH_MS;
         }
 
-        void onEnter(const StateTransferData &) override 
-        { 
-            nvs_flash_erase();
+        void onEnter(const StateTransferData &) override
+        {
             ESP_LOGI("BtState", "Entering Bluetooth state");
             ESP_LOGI("BT", "Free heap: %d, min free: %d", ESP.getFreeHeap(), ESP.getMinFreeHeap());
             // esp_task_wdt_add(NULL);  // NULL = calling task
