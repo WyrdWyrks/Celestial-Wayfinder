@@ -122,13 +122,17 @@ public:
                 ESP_LOGW(TAG, "BQ25672 battery read failed");
                 return 0;
             }
-            if (mv >= 4200) return 100;
-            if (mv >= 4100) return 90 + (long)(mv - 4100) * 10 / 100;
-            if (mv >= 3950) return 75 + (long)(mv - 3950) * 15 / 150;
-            if (mv >= 3800) return 50 + (long)(mv - 3800) * 25 / 150;
-            if (mv >= 3650) return 25 + (long)(mv - 3650) * 25 / 150;
-            if (mv >= 3500) return 10 + (long)(mv - 3500) * 15 / 150;
-            if (mv >= 3200) return      (long)(mv - 3200) * 10 / 300;
+            // The pack tops out around 4.10 V at full charge (the PMIC's
+            // charge-voltage regulation point), so treat >= 4.05 V as 100% —
+            // the small margin lets a full cell read 100% both on the charger
+            // (~4.10 V) and resting just after (~4.05 V). If the charge voltage
+            // is ever raised toward 4.20 V, move this knee up to match.
+            if (mv >= 4050) return 100;
+            if (mv >= 3950) return 75 + (long)(mv - 3950) * 25 / 100;  // 3950-4050 -> 75-100
+            if (mv >= 3800) return 50 + (long)(mv - 3800) * 25 / 150;  // 3800-3950 -> 50-75
+            if (mv >= 3650) return 25 + (long)(mv - 3650) * 25 / 150;  // 3650-3800 -> 25-50
+            if (mv >= 3500) return 10 + (long)(mv - 3500) * 15 / 150;  // 3500-3650 -> 10-25
+            if (mv >= 3200) return      (long)(mv - 3200) * 10 / 300;  // 3200-3500 -> 0-10
             return 0;
         });
     }
