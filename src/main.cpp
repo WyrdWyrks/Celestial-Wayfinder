@@ -68,16 +68,14 @@ void setup()
   Serial.begin(115200);
   vTaskDelay(pdMS_TO_TICKS(3000));
 
+  esp_log_level_set("*", ESP_LOG_ERROR);
+
   bootloader_random_enable();
   
   // Boostrap hardware modules and utilities
   Bootstrap();
   
   vTaskDelay(300);
-
-  // CompassUtils::WireFunctions();
-
-  // vTaskDelay(1000 / portTICK_PERIOD_MS);
 
   System_Utils::getEnableInterrupts() += BootstrapMicrocontroller::EnableInterrupts;
   System_Utils::getDisableInterrupts() += BootstrapMicrocontroller::DisableInterrupts;

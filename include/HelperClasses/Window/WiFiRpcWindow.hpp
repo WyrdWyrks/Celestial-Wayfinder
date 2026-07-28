@@ -16,6 +16,12 @@ namespace DisplayModule
         {
             _state = std::make_shared<WindowState>();
 
+            // Take the radio from the geolocation arbiter before touching WiFi
+            // so we don't race an in-flight background scan; new geo-scans then
+            // defer while this window owns WiFi. StartAccessPoint()/
+            // ConnectToAccessPoint() below re-assert ownership for their mode.
+            ConnectivityModule::RadioUtils::AcquireForWiFi();
+
             WiFi.mode(WIFI_STA);
             WiFi.disconnect();
             delay(100);
@@ -40,12 +46,9 @@ namespace DisplayModule
 
         ~WiFiRpcWindow()
         {
-            ConnectivityModule::RadioUtils::StopAccessPoint();
-
-            if (ConnectivityModule::RadioUtils::IsRadioActive())
-            {
-                ConnectivityModule::RadioUtils::DisableRadio();
-            }            
+            // Powers the AP/STA interface down and returns the radio to OFF so
+            // geolocation and radio-off idle resume.
+            ConnectivityModule::RadioUtils::ReleaseWiFi();
         }
 
         void onTick() override
