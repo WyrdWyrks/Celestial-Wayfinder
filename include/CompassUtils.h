@@ -8,7 +8,6 @@
 #include "LED_Utils.h"
 #include "LED_Manager.h"
 #include "FilesystemManager.h"
-#include "EspNowManager.h"
 #include "Display_Manager.h"
 #include "DisplayManager.hpp"
 #include "WindowFactories.hpp"
@@ -43,7 +42,6 @@ static const char *TAG_COMPASS = "COMPASS";
 namespace
 {
     static RpcModule::Manager RpcManagerInstance;
-    static ConnectivityModule::EspNowManager EspNowManagerInstance;
     FilesystemModule::Manager filesystemManagerInstance;
     static AsyncWebServer WebServerInstance(80);
     static AsyncCorsMiddleware cors;
@@ -254,35 +252,6 @@ public:
         WiFi.onEvent(EnableServerOnWiFiConnected);
 
         RegisterRpcFunctions();
-    }
-
-    static void WireFunctions()
-    {
-        ConnectivityModule::Utilities::InitializeEspNow() += [](esp_now_recv_cb_t receiveFunction, esp_now_send_cb_t sendFunction) 
-        { 
-            if (ConnectivityModule::Utilities::RpcChannelID() == -1)
-            {
-                ConnectivityModule::Utilities::RpcChannelID() = RpcModule::Utilities::AddRpcChannel(
-                    512, 
-                    std::bind(
-                        &ConnectivityModule::EspNowManager::
-                        ReceiveRpcQueue, 
-                        &EspNowManagerInstance, 
-                        std::placeholders::_1, 
-                        std::placeholders::_2), 
-                        RpcModule::Utilities::RpcResponseNullDestination);
-            }
-
-            RpcModule::Utilities::EnableRpcChannel(ConnectivityModule::Utilities::RpcChannelID());
-            
-            EspNowManagerInstance.Initialize(receiveFunction, sendFunction); 
-        };
-        
-        ConnectivityModule::Utilities::DeinitializeEspNow() += [](bool disableRadio) 
-        { 
-            RpcModule::Utilities::DisableRpcChannel(ConnectivityModule::Utilities::RpcChannelID());
-            EspNowManagerInstance.Deinitialize(disableRadio); 
-        };
     }
 
     static void RegisterRpcFunctions()

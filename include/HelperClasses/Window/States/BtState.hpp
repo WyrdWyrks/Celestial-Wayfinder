@@ -47,6 +47,13 @@ namespace DisplayModule
 
         void onTick() override { _rebuild(); }
 
+        void onExit() override
+        {
+            ESP_LOGI("BtState", "Exiting Bluetooth state; releasing radio");
+            Bluetooth_Utils::deinitBluetooth();
+            WindowState::onExit();
+        }
+
     private:
         void _rebuild()
         {
