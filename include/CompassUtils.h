@@ -56,6 +56,10 @@ public:
 
     static uint8_t MessageReceivedInputID;
 
+    // Stronger than the pulse a button press gets (150), so an incoming message
+    // is distinguishable from ordinary input feedback.
+    static constexpr uint8_t HAPTIC_NOTIFICATION_INTENSITY = 200;
+
     static void PassMessageReceivedToDisplay(std::shared_ptr<LoraModule::LoraMessageInterface> msg, bool isNew)
     {
         if (isNew)
@@ -75,6 +79,8 @@ public:
             if (System_Utils::silentMode == false)
             {
                 LED_Manager::buzzerNotification();
+                // No-op below hardware v3, which has no haptic motor.
+                LED_Manager::applyHapticFeedback(HAPTIC_NOTIFICATION_INTENSITY);
             }
         }
         #if DEBUG == 1

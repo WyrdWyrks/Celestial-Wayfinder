@@ -6,6 +6,7 @@
 
 #include "EventDeclarations.h"
 #include "CompassUtils.h"
+#include "LED_Manager.h"
 #include "SystemUtilities.hpp"
 #include "WiFi.h"
 #include <BQ25672.h>
@@ -55,6 +56,14 @@ public:
         // TODO: Add encoder button
 
         pinMode(BUZZER_PIN, OUTPUT);
+
+        // Park the haptic motor off before anything can drive it. A crash or
+        // watchdog reset mid-pulse skips the one-shot timer in LED_Manager that
+        // would normally switch it off, so without this the motor can come back
+        // up still running and stay that way. HAPTIC_VIBRATION_PIN comes from
+        // LED_Manager.h, which owns the motor.
+        pinMode(HAPTIC_VIBRATION_PIN, OUTPUT);
+        digitalWrite(HAPTIC_VIBRATION_PIN, LOW);
 
         pinMode(DISPLAY_RESET_PIN, OUTPUT);
         digitalWrite(DISPLAY_RESET_PIN, LOW);
