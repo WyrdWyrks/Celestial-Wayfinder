@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cinttypes>
+#include <cstdio>
 #include "LoraMessageInterface.hpp"
 
 class PingMessage : public LoraModule::LoraMessageInterface
@@ -56,6 +58,23 @@ public:
     {
         info.emplace_back(senderName.c_str());
         info.emplace_back(status.c_str());
+    }
+
+    // Short hex tag built from the low 16 bits of a sender ID — the "#BEEF" in
+    // "UserA#BEEF". Two users who picked the same display name still get
+    // distinct tags, so this is what makes a name unambiguous on screen.
+    static std::string SenderTag(uint32_t sender)
+    {
+        char hex[5];
+        snprintf(hex, sizeof(hex), "%04" PRIX32, sender & 0xFFFFu);
+        return std::string("#") + hex;
+    }
+
+    // "UserA#BEEF". senderName is capped at NAME_LENGTH when deserialized, so
+    // the result is at most NAME_LENGTH + 5 = 17 characters.
+    static std::string TaggedName(const std::string& name, uint32_t sender)
+    {
+        return name + SenderTag(sender);
     }
 
     // Creator function registered with LoraModule::Utilities::RegisterMessageType.

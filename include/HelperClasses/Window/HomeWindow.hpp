@@ -526,6 +526,15 @@ namespace DisplayModule
                 arr.add(*it);
             }
 
+            // @-mentions for everyone we've heard from since power-on, tagged
+            // the same way their messages are displayed ("@UserA#BEEF").
+            // Appended last so the saved-message ordering people are used to
+            // doesn't shift, and one scroll up from the top lands on the newest.
+            for (const auto &name : WayfinderLoraState::GetEncounteredSenderNames())
+            {
+                arr.add("@" + name);
+            }
+
             StateTransferData d;
             d.inputID = ctx.inputID;
             d.payload = preselectPayload;
