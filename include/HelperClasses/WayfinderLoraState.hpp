@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ArduinoJson.h>
+#include <algorithm>
 #include <vector>
 #include <map>
 #include <memory>
@@ -39,6 +40,8 @@ public:
 
                 if (xSemaphoreTake(MessageMutex(), portMAX_DELAY) == pdTRUE)
                 {
+                    RecordSenderLocked(ping->sender, ping->senderName);
+
                     if (isNew)
                     {
                         // New sender — add as unread
@@ -114,6 +117,30 @@ public:
             return n;
         }
         return 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // Encountered senders
+    // -------------------------------------------------------------------------
+    // Everyone we have heard from since power-on, in first-seen order.
+    // Deliberately separate from the unread map so a sender outlives the message
+    // that introduced them — you can still @ someone after dismissing their ping.
+    // RAM only: the list is meant to describe "who is around right now", so it
+    // starts empty on every boot.
+
+    // Blocking: returns the "Name#TAG" label for every encountered sender —
+    // the same label their messages are displayed under.
+    static std::vector<std::string> GetEncounteredSenderNames()
+    {
+        std::vector<std::string> names;
+        if (xSemaphoreTake(MessageMutex(), portMAX_DELAY) == pdTRUE)
+        {
+            auto& senders = EncounteredSenders();
+            names.reserve(senders.size());
+            for (const auto& sender : senders) { names.push_back(sender.display); }
+            xSemaphoreGive(MessageMutex());
+        }
+        return names;
     }
 
     // -------------------------------------------------------------------------
@@ -306,10 +333,61 @@ public:
     }
 
 private:
+    struct EncounteredSender
+    {
+        uint32_t    id;
+        std::string display;  // "Name#TAG"
+    };
+
+    // Upper bound on the encountered-sender list. Caps RAM growth in a crowded
+    // mesh and keeps the @-mention list scrollable; the oldest entry is evicted
+    // once we're full, so the people we've heard from most recently stay.
+    static constexpr size_t MAX_ENCOUNTERED_SENDERS = 32;
+
+    // Caller must already hold MessageMutex().
+    static void RecordSenderLocked(uint32_t senderId, const std::string& name)
+    {
+        if (name.empty()) { return; }
+
+        auto display = PingMessage::TaggedName(name, senderId);
+        auto& senders = EncounteredSenders();
+
+        // Keyed on sender ID rather than name: two people who both left their
+        // name at the default still get separate entries (their tags differ),
+        // and someone who renames mid-session updates in place instead of
+        // showing up twice under the same tag.
+        auto it = std::find_if(senders.begin(), senders.end(),
+            [senderId](const EncounteredSender& s) { return s.id == senderId; });
+
+        if (it != senders.end())
+        {
+            if (it->display != display)
+            {
+                ESP_LOGI(TAG, "Sender renamed: %s -> %s",
+                         it->display.c_str(), display.c_str());
+                it->display = display;
+            }
+            return;
+        }
+
+        if (senders.size() >= MAX_ENCOUNTERED_SENDERS)
+        {
+            senders.erase(senders.begin());
+        }
+        senders.push_back({ senderId, display });
+        ESP_LOGI(TAG, "Encountered new sender: %s", display.c_str());
+    }
+
     static std::map<uint32_t, std::shared_ptr<PingMessage>>& UnreadMessages()
     {
         static std::map<uint32_t, std::shared_ptr<PingMessage>> m;
         return m;
+    }
+
+    static std::vector<EncounteredSender>& EncounteredSenders()
+    {
+        static std::vector<EncounteredSender> senders;
+        return senders;
     }
 
 

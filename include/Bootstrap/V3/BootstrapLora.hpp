@@ -47,7 +47,8 @@ public:
 
     static ArduinoLoRaDriver& Driver()
     {
-        static ArduinoLoRaDriver driver(&BootstrapMicrocontroller::SpiBus(), V3_LORA_CS, V3_LORA_RST, V3_LORA_DIO0, 915E6);
+        static ArduinoLoRaDriver driver(&BootstrapMicrocontroller::SpiBus(), V3_LORA_CS, V3_LORA_RST, V3_LORA_DIO0,
+                                        LoraModule::ChannelToHz(LoraModule::LORA_CHANNEL_DEFAULT));
         return driver;
     }
 

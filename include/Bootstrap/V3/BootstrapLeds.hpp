@@ -6,6 +6,9 @@
 #include "LedSegment.hpp"
 #include "LED_Manager.h"
 #include "DisplayUtilities.hpp"
+#include "LoraUtils.h"
+
+#include "../../HelperClasses/PingMessage.hpp"
 
 // Patterns
 
@@ -17,6 +20,7 @@
 #include "SolidRing.hpp"
 #include "RingShutdown.hpp"
 #include "../../HelperClasses/Led/Patterns/Flashlight.hpp"
+#include "../../HelperClasses/Led/Patterns/TraceFlow.hpp"
 
 
 
@@ -87,6 +91,8 @@ public:
         LED_Utils::registerPattern(&RingPointPattern());
         LED_Utils::registerPattern(&RingPulsePattern());
         LED_Utils::registerPattern(&ScrollWheelPattern());
+        LED_Utils::registerPattern(&LeftTraceFlowPattern());
+        LED_Utils::registerPattern(&RightTraceFlowPattern());
 
         LED_Manager::init(NUM_LEDS, LEDBuffer(), LED_TASK_CPU_CORE);
 
@@ -95,6 +101,15 @@ public:
         auto buttonFlashPatternID = ButtonFlash::RegisteredPatternID();
         LED_Utils::enablePattern(buttonFlashPatternID);
         LED_Utils::setAnimationLengthMS(buttonFlashPatternID, 300);
+
+        // Trace flows — armed here, fired by the LoRa events wired below.
+        for (int id : { LeftTraceFlowPattern().patternID(), RightTraceFlowPattern().patternID() })
+        {
+            LED_Utils::enablePattern(id);
+            LED_Utils::setAnimationLengthMS(id, TRACE_FLOW_MS);
+        }
+
+        _WireTraceFlows();
 
         DisplayModule::Utilities::getInputRaised() += [](const DisplayModule::InputContext &ctx) {
             ESP_LOGI(TAG, "Button flash input: %d", ctx.inputID);
@@ -180,14 +195,48 @@ public:
 
     static LedSegment LeftTraceSegment()
     {
-        static LedSegment leftTrace(LEDBuffer(), LED_IDX_LEFT_TRACE, NUM_TRACE_LEDS);    
+        static LedSegment leftTrace(LEDBuffer(), LED_IDX_LEFT_TRACE, NUM_TRACE_LEDS);
         return leftTrace;
     }
 
     static LedSegment RightTraceSegment()
     {
-        static LedSegment rightTrace(LEDBuffer(), LED_IDX_RIGHT_TRACE, NUM_TRACE_LEDS);    
+        static LedSegment rightTrace(LEDBuffer(), LED_IDX_RIGHT_TRACE, NUM_TRACE_LEDS);
         return rightTrace;
+    }
+
+    // The two traces run up opposite sides of the device. Both strips turned
+    // out to be wired the same way round — increasing LED index is "outward" on
+    // each — so both carry the reversed flag. It stays per-strip rather than
+    // being folded into the pattern so a board revision that flips one side
+    // only has to change the flag here. Verified on hardware.
+    static TraceFlow &LeftTraceFlowPattern()
+    {
+        static TraceFlow leftFlow(LeftTraceSegment(), /*reversed=*/true);
+        return leftFlow;
+    }
+
+    static TraceFlow &RightTraceFlowPattern()
+    {
+        static TraceFlow rightFlow(RightTraceSegment(), /*reversed=*/true);
+        return rightFlow;
+    }
+
+    // Fires both traces together. outward = a message leaving this device,
+    // inward = one arriving. A fully black color falls back to the theme color.
+    static void PlayTraceFlow(CRGB color, bool outward)
+    {
+        JsonDocument cfg;
+        cfg["rOverride"] = color.r;
+        cfg["gOverride"] = color.g;
+        cfg["bOverride"] = color.b;
+        cfg["outward"]   = outward;
+
+        for (int id : { LeftTraceFlowPattern().patternID(), RightTraceFlowPattern().patternID() })
+        {
+            LED_Utils::configurePattern(id, cfg);
+            LED_Utils::loopPattern(id, 1);
+        }
     }
 
     static ButtonFlash &ButtonFlashPattern()
@@ -250,5 +299,35 @@ public:
     {
         static RingShutdown shutdown(CompassRingSegment());
         return shutdown;
+    }
+
+private:
+    static constexpr size_t TRACE_FLOW_MS = 500;
+
+    // Subscribing here rather than at the send/receive call sites keeps this
+    // entirely inside the v3 bootstrap — v1 and v2 have no trace LEDs and need
+    // no version guards sprinkled through the shared code.
+    static void _WireTraceFlows()
+    {
+        // Inbound: a new message flows in wearing the sender's color.
+        LoraModule::Utilities::MessageTypeReceived(PingMessage::GUID) +=
+            [](std::shared_ptr<LoraModule::LoraMessageInterface> msg, bool isNew)
+            {
+                if (!isNew) { return; }
+
+                auto ping = std::static_pointer_cast<PingMessage>(msg);
+                if (!ping) { return; }
+
+                PlayTraceFlow(CRGB(ping->color_R, ping->color_G, ping->color_B),
+                              /*outward=*/false);
+            };
+
+        // Outbound: fires when this device queues a broadcast of its own.
+        // Retransmit attempts happen inside the send task without re-entering
+        // SendMessage, so one user-initiated send is one flow.
+        LoraModule::Utilities::MyLastBroadcastChanged() += []()
+        {
+            PlayTraceFlow(LED_Utils::ThemeColor(), /*outward=*/true);
+        };
     }
 };

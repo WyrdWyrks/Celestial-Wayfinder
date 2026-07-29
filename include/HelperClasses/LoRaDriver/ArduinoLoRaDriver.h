@@ -155,10 +155,15 @@ public:
         LoRa.setTxPower(txPower);
     }
 
-    void SetFrequency(uint32_t frequency)
+    void SetFrequency(uint32_t frequency) override
     {
+        // The FRF registers only latch reliably out of standby — writing them
+        // while the radio sits in RX continuous can leave it on the old
+        // frequency. The caller re-enters RX immediately after this returns.
+        LoRa.idle();
         LoRa.setFrequency(frequency);
         _loraFrequency = frequency;
+        ESP_LOGI(TAG_LORA, "Retuned to %u Hz", frequency);
     }
 
     void SetSpreadingFactor(int sf)

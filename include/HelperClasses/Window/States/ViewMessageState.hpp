@@ -311,9 +311,7 @@ namespace DisplayModule
             static constexpr size_t LINE_WIDTH = 21;
             if (!_cachedPing) { return ""; }
 
-            char hex[5];
-            snprintf(hex, sizeof(hex), "%04" PRIX32, _cachedPing->sender & 0xFFFF);
-            std::string suffix = std::string("#") + hex;
+            std::string suffix = PingMessage::SenderTag(_cachedPing->sender);
 
             std::string name = _cachedPing->senderName;
             if (name.length() + suffix.length() > LINE_WIDTH)
