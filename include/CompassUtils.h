@@ -284,12 +284,40 @@ public:
         RpcModule::Utilities::RegisterRpc("UploadOTAChunk", System_Utils::UploadOtaChunkRpc);
         RpcModule::Utilities::RegisterRpc("EndOTA", System_Utils::EndOtaRpc);
 
+        // Display
+        RpcModule::Utilities::RegisterRpc("SendDisplayInput", RpcSendDisplayInput);
+
         // System
         RpcModule::Utilities::RegisterRpc("RestartSystem", [](JsonDocument &_) { ESP.restart();  vTaskDelay(1000 / portTICK_PERIOD_MS); });
         RpcModule::Utilities::RegisterRpc("GetSystemInfo", System_Utils::GetSystemInfoRpc);
 
         // Wifi Geolocation
         NavigationModule::WifiGeoDb::RegisterRpcs();
+    }
+
+    // Injects a button/encoder press as if it came from the physical hardware,
+    // so a companion app mirroring the framebuffer (see GetDisplayContents) can
+    // also drive the UI. The input is pushed onto the display command queue
+    // rather than dispatched here — the display task owns the window stack, and
+    // this runs on the RPC task.
+    static void RpcSendDisplayInput(JsonDocument &doc)
+    {
+        bool success = false;
+        if (doc["InputID"].is<int>())
+        {
+            auto inputID = doc["InputID"].as<int>();
+            if (inputID > 0 && inputID <= UINT8_MAX)
+            {
+                DisplayModule::Utilities::sendInputCommand(static_cast<uint8_t>(inputID));
+                success = true;
+            }
+            else
+            {
+                ESP_LOGW(TAG_COMPASS, "SendDisplayInput: input ID %d out of range", inputID);
+            }
+        }
+        doc.clear();
+        doc["Success"] = success;
     }
 
     static void ClearLocations(uint8_t inputID)
