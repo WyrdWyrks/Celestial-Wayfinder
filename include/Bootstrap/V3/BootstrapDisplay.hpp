@@ -192,6 +192,7 @@ private:
         }
         else
         {
+            doc["virtual"] = true;
             displayBuffer = VirtualDisplay().getBuffer();
             // 1 bit per pixel
             bufferLength = (gfx->width() * gfx->height()) / 8;
