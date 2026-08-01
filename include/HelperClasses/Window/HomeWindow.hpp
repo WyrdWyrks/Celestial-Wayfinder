@@ -493,7 +493,7 @@ namespace DisplayModule
             }
 
             JsonObject currentLoc = arr.add<ArduinoJson::JsonObject>();
-            currentLoc["Name"] = "Ping";
+            currentLoc["Name"] = "<Current Location>";
             currentLoc["Lat"] = myLat;
             currentLoc["Lng"] = myLon;
 
@@ -514,6 +514,11 @@ namespace DisplayModule
 
         void _openMessageSelector(const InputContext &ctx, std::shared_ptr<ArduinoJson::JsonDocument> preselectPayload)
         {
+            if (preselectPayload->operator[]("Name") == "<Current Location>")
+            {
+                preselectPayload->operator[]("Name") = "Ping";
+            }
+
             auto arr = (*preselectPayload)["Messages"].to<ArduinoJson::JsonArray>();
             if (preselectPayload->operator[]("Name").is<std::string>())
             {
