@@ -20,6 +20,12 @@
 
 #include "ArduinoJson.h"
 #include "esp_log.h"
+#include "EncryptionUtils.hpp"
+
+extern "C"
+{
+#include "bootloader_random.h"
+}
 
 // Window Includes
 
@@ -118,6 +124,18 @@ public:
 
     static void CheckDeviceInfo()
     {
+        // Hardware entropy window. The ESP32 HWRNG is only true-random while the
+        // RF subsystem is up or this source is enabled, and this device spends
+        // most of its life with the radio off — so everything needing real
+        // randomness is drawn here and nowhere else.
+        //
+        // Safe without any radio arbitration because this runs first in
+        // Bootstrap(), before StartLocationPolling() creates the background
+        // WiFi-scanning task. Leaving the source enabled past that point breaks
+        // the radio, so the window must never be reopened at runtime — see
+        // EncryptionUtils::SeedRng for how runtime randomness is handled.
+        bootloader_random_enable();
+
         auto& deviceInfo = FilesystemModule::Utilities::DeviceInfo();
         deviceInfo.begin("DeviceInfo", false);
 
@@ -126,6 +144,16 @@ public:
             uint32_t userID = esp_random();
             deviceInfo.putUInt("UserID", userID);
             ESP_LOGI(TAG_COMPASS, "Generated new UserID: %u", userID);
+        }
+
+        // Suffix of the default WiFi AP password. Drawn once and persisted here
+        // rather than per boot, so an unconfigured device keeps the same
+        // password across reboots.
+        if (!deviceInfo.isKey("ApPassSuffix"))
+        {
+            uint32_t apPassSuffix = esp_random() & 0xFFFF;
+            deviceInfo.putUInt("ApPassSuffix", apPassSuffix);
+            ESP_LOGI(TAG_COMPASS, "Generated new AP password suffix: %04X", (unsigned int)apPassSuffix);
         }
 
         // Not sure these are necessary
@@ -143,6 +171,12 @@ public:
 
         System_Utils::DeviceID = deviceInfo.getUInt("UserID");
         deviceInfo.end();
+
+        // Seeds the CSPRNG behind the LoRa message IVs. Personalized per device
+        // so two units running identical firmware can't share DRBG state.
+        EncryptionUtils::SeedRng("CelestialWayfinder-" + std::to_string(System_Utils::DeviceID));
+
+        bootloader_random_disable();
     }
 
     static std::vector<std::shared_ptr<FilesystemModule::SettingsInterface>> GenerateSettings()
@@ -150,12 +184,22 @@ public:
         std::vector<std::shared_ptr<FilesystemModule::SettingsInterface>> settings;
 
         std::string defaultDeviceName;
+        std::string defaultApPassword;
         {
-            char devicenamebuffer[20];
             FilesystemModule::Utilities::DeviceInfo().begin("DeviceInfo", true);
-            sprintf(devicenamebuffer, "Wayfinder_%04X", (unsigned int)(FilesystemModule::Utilities::DeviceInfo().getUInt("UserID") & 0xFFFF));
+            uint32_t userID = FilesystemModule::Utilities::DeviceInfo().getUInt("UserID");
+            uint32_t apPassSuffix = FilesystemModule::Utilities::DeviceInfo().getUInt("ApPassSuffix");
             FilesystemModule::Utilities::DeviceInfo().end();
+
+            char devicenamebuffer[20];
+            sprintf(devicenamebuffer, "Wayfinder_%04X", (unsigned int)(userID & 0xFFFF));
             defaultDeviceName = devicenamebuffer;
+
+            // WPA2 requires at least 8 characters, which "esp-" plus 4 hex
+            // digits hits exactly.
+            char appasswordbuffer[16];
+            sprintf(appasswordbuffer, "esp-%04X", (unsigned int)(apPassSuffix & 0xFFFF));
+            defaultApPassword = appasswordbuffer;
         }
 
         auto userName = std::make_shared<FilesystemModule::StringSetting>("User Name", "User", 12);
@@ -186,8 +230,17 @@ public:
         auto wifiProvisioning = std::make_shared<FilesystemModule::EnumSetting>("WiFi Mode", 0, wifiOptions, wifiValues);
         settings.push_back(wifiProvisioning);
 
-        auto wifiapPassword = std::make_shared<FilesystemModule::StringSetting>("WiFi AP Password", "esp-pass", 21);
+        auto wifiapPassword = std::make_shared<FilesystemModule::StringSetting>("WiFi AP Password", defaultApPassword, 21);
         settings.push_back(wifiapPassword);
+
+        // Position reported by the StaticLocation geolocation source, defaulting
+        // to Atlanta. The step is what one encoder click moves on the device
+        // (~1km); the companion app can write finer values over RPC.
+        auto staticLatitude = std::make_shared<FilesystemModule::FloatSetting>("Static Lat", 33.7490f, -90.0f, 90.0f, 0.01f);
+        settings.push_back(staticLatitude);
+
+        auto staticLongitude = std::make_shared<FilesystemModule::FloatSetting>("Static Lon", -84.3880f, -180.0f, 180.0f, 0.01f);
+        settings.push_back(staticLongitude);
 
         FilesystemModule::Utilities::SettingsPreference().begin(FilesystemModule::SettingsInterface::preference_namespace, true);
         for (const auto& setting : settings)

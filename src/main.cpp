@@ -47,11 +47,6 @@
 
 #include "Bootstrap/Common/BootstrapRpc.hpp"
 
-extern "C"
-{
-#include "bootloader_random.h"
-}
-
 void enableInterruptsHandler();
 void disableInterruptsHandler();
 void enterUselessLoop();
@@ -66,14 +61,9 @@ void setup()
   // any line over ~256 bytes with no error on either side.
   Serial.setRxBufferSize(8192);
   Serial.begin(115200);
-  vTaskDelay(pdMS_TO_TICKS(3000));
 
   esp_log_level_set("*", ESP_LOG_ERROR);
 
-  // TODO: Only need to enable this before we need random.
-  // Keeping this enabled permanently causes the esp32 to
-  // hard crash when going to setup wifi/bt screen.
-  //bootloader_random_enable();
   
   // Boostrap hardware modules and utilities
   Bootstrap();

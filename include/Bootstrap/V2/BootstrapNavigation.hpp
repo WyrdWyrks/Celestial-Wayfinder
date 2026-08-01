@@ -8,6 +8,7 @@
 #include "StaticLocation.hpp"
 #include "EzTimeSource.hpp"
 #include "NavigationUtils.h"
+#include "FilesystemUtils.h"
 
 class BootstrapNavigation
 {
@@ -28,7 +29,23 @@ public:
         NavigationModule::Utilities::RegisterLocationSource(&GpsLocatorAndClock());
         NavigationModule::Utilities::RegisterLocationSource(&StaticLocationSource());
 
+        // Settings are loaded before navigation boots (see Bootstrap() in
+        // main.cpp), so seed the source now and follow any later edits.
+        ApplyStaticLocationSettings();
+        FilesystemModule::Utilities::SettingsUpdated() += [](JsonDocument &_) { ApplyStaticLocationSettings(); };
+
         NavigationManagerInstance().StartLocationPolling(); // 15s interval, 60s max-age
+    }
+
+    static void ApplyStaticLocationSettings()
+    {
+        // Falls back to whatever the source already holds if the settings are
+        // missing, rather than dropping the device off Null Island.
+        auto lat = FilesystemModule::Utilities::FetchFloatSetting("Static Lat", StaticLocationSource().GetLatitude());
+        auto lon = FilesystemModule::Utilities::FetchFloatSetting("Static Lon", StaticLocationSource().GetLongitude());
+
+        ESP_LOGI("NavBoostrap", "Static location set to %.4f, %.4f", lat, lon);
+        StaticLocationSource().SetLocation(lat, lon);
     }
 
     static NavigationManager &NavigationManagerInstance()
