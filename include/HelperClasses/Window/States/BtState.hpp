@@ -75,11 +75,13 @@ namespace DisplayModule
                     "wyrdwyrks.com",
                     TextFormat{TextAlignH::CENTER, TextAlignV::LINE, 15}));
 
+                // 2x scale (66px) fills the gap between the header text (ends at
+                // y=24) and the "Visit" text (starts at y=96); nudge up to clear it.
                 auto qrCode = std::make_shared<DisplayModule::QrCodeDrawCommand>(
                     pwa_qr,
                     33,
-                    1,
-                    DisplayModule::QrFormat(DisplayModule::TextAlignH::CENTER, DisplayModule::TextAlignV::CENTER)
+                    2,
+                    DisplayModule::QrFormat(DisplayModule::TextAlignH::CENTER, DisplayModule::TextAlignV::CENTER, 0, -4)
                 );
                 addDrawCommand(qrCode);
             }
