@@ -171,3 +171,41 @@ jobs:
           files: artifacts/**/*.bin
           draft: false
           prerelease: false
+
+  publish-pages:
+    needs: [bump-version, create-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/artifacts
+
+      - name: Copy firmware into versioned folder
+        run: |
+          set -euo pipefail
+          VERSION="v${{ needs.bump-version.outputs.version }}"
+          mkdir -p "$VERSION"
+          find "${{ runner.temp }}/artifacts" -name '*.bin' -exec cp -f {} "$VERSION/" \;
+          ls -l "$VERSION"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          VERSION="v${{ needs.bump-version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$VERSION"
+          if git diff --cached --quiet; then
+            echo "No firmware changes to publish"
+            exit 0
+          fi
+          git commit -m "Publish firmware $VERSION"
+          git pull --rebase origin gh-pages
+          git push origin gh-pages
