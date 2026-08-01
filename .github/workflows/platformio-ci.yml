@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        build_env: ['local-library-v1', 'local-library-v2', 'hardware-v3']
+        build_env: ['local-library-v2', 'hardware-v3']
 
     steps:
       - uses: actions/checkout@v4
