@@ -70,7 +70,10 @@ void setup()
 
   esp_log_level_set("*", ESP_LOG_ERROR);
 
-  bootloader_random_enable();
+  // TODO: Only need to enable this before we need random.
+  // Keeping this enabled permanently causes the esp32 to
+  // hard crash when going to setup wifi/bt screen.
+  //bootloader_random_enable();
   
   // Boostrap hardware modules and utilities
   Bootstrap();

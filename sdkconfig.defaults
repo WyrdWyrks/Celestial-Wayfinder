@@ -4,39 +4,6 @@ CONFIG_FREERTOS_HZ=1000
 
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
-# FLASH size minimization from https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/performance/size.html#reducing-overall-size
-CONFIG_COMPILER_OPTIMIZATION_SIZE=y
-CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
-CONFIG_LIBC_NEWLIB_NANO_FORMAT=y
-# Mirror runtime printf/ESP_LOG output to the USB-Serial-JTAG port (native USB),
-# in addition to the primary UART0 console. Without this, only ROM output
-# (bootloader + ESP_EARLY_LOG) reaches the USB port and runtime ESP_LOG does not.
-CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
-CONFIG_ESP_INSIGHTS_ENABLED=n
-
-# Disable esp-modbus
-CONFIG_FMB_COMM_MODE_TCP_EN=n
-CONFIG_FMB_COMM_MODE_RTU_EN=n
-CONFIG_FMB_COMM_MODE_ASCII_EN=y
-CONFIG_FMB_CONTROLLER_SLAVE_ID_SUPPORT=n
-CONFIG_FMB_MDNS_INTEGRATION_ENABLE=n
-# esp-modbus master timeouts: the component has a _Static_assert requiring
-# MAX_API_BLOCKING_TIME_MS >= TIMEOUT_MS_RESPOND. Pin both to the same value so
-# a config regeneration can't reintroduce an invalid combination.
-CONFIG_FMB_MASTER_TIMEOUT_MS_RESPOND=10000
-CONFIG_FMB_MASTER_MAX_API_BLOCKING_TIME_MS=10000
-
-# Disable IPV6 and set a custom hostname.
-CONFIG_LWIP_IPV6=n
-CONFIG_LWIP_LOCAL_HOSTNAME="beacon"
-
-CONFIG_ESP_ERR_TO_NAME_LOOKUP=n
-
-CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
-CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n
-
-CONFIG_VFS_SUPPORT_TERMIOS=n
-CONFIG_VFS_SUPPORT_SELECT=n
 
 # NimBLE stack.
 CONFIG_BT_ENABLED=y
@@ -49,4 +16,4 @@ CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
 CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
 CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
 
-CONFIG_LOG_COLORS=n
+CONFIG_LOG_COLORS=y

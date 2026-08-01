@@ -42,7 +42,7 @@ namespace DisplayModule
             ESP_LOGI("BT", "Free heap: %d, min free: %d", ESP.getFreeHeap(), ESP.getMinFreeHeap());
             // esp_task_wdt_add(NULL);  // NULL = calling task
             Bluetooth_Utils::initBluetooth();
-            _rebuild(); 
+            _rebuild();
         }
 
         void onTick() override { _rebuild(); }
