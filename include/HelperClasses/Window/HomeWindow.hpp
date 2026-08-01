@@ -127,6 +127,15 @@ namespace DisplayModule
         uint64_t _pendingReplyRecipient = 0;
         bool     _directSend           = false;
 
+        // Coordinates of the location picked in _selectLocState, captured on the
+        // way to the message selector. SelectMessageState reads only "Messages"
+        // out of the payload it is handed, so this is the last point the chosen
+        // Lat/Lng exist — without stashing them the broadcast falls back to the
+        // live fix and a saved location sends the wrong position.
+        double _pendingLat           = 0.0;
+        double _pendingLng           = 0.0;
+        bool   _pendingLocationValid = false;
+
         // ===================== Wire State Helpers =====================
 
         void _wireHomeState()
@@ -208,6 +217,16 @@ namespace DisplayModule
                 // TODO: Dynamically allocate to a cap based on number of messages?
                 std::shared_ptr<JsonDocument> payload = std::make_shared<JsonDocument>();
                 _selectLocState->buildSelectPayload(payload);
+
+                // buildSelectPayload writes nothing when the list is empty, so
+                // an absent Lat/Lng means "no location to broadcast".
+                _pendingLocationValid = (*payload)["Lat"].is<double>() && (*payload)["Lng"].is<double>();
+                if (_pendingLocationValid)
+                {
+                    _pendingLat = (*payload)["Lat"].as<double>();
+                    _pendingLng = (*payload)["Lng"].as<double>();
+                }
+
                 _openMessageSelector(ctx, payload);
             });
         }
@@ -223,8 +242,10 @@ namespace DisplayModule
                 auto payload = JsonDocument();
                 _selectMsgState->buildSelectPayload(payload);
 
-                double myLat, myLon = 0.0;
-                if (!NavigationUtils::GetCurrentLocation(myLat, myLon))
+                // Broadcast the location that was selected, not the live fix.
+                // For "<Current Location>" these are the same thing — that entry
+                // is built from the current fix in _openLocationSelector.
+                if (!_pendingLocationValid)
                 {
                     DisplayModule::Utilities::clearAndDisplay(TextDrawCommand::createCenteredMessage("No Location Data"));
                     popState();
@@ -246,11 +267,11 @@ namespace DisplayModule
                 ping->color_R     = LED_Utils::ThemeColor().r;
                 ping->color_G     = LED_Utils::ThemeColor().g;
                 ping->color_B     = LED_Utils::ThemeColor().b;
-                ping->lat         = myLat;
-                ping->lng         = myLon;
+                ping->lat         = _pendingLat;
+                ping->lng         = _pendingLng;
                 ping->status      = payload["Message"].as<std::string>();
 
-                ESP_LOGI(TAG, "Sending ping message as %u", ping->sender);
+                ESP_LOGI(TAG, "Sending ping message as %u at (%f, %f)", ping->sender, ping->lat, ping->lng);
 
                 // Send Payload
                 auto success = LoraUtils::SendMessage(ping);
