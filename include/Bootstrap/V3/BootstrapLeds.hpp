@@ -74,6 +74,8 @@ TODO: Remap LEDs after bodging
 41-48:  Knob ring (Counter-clockwise)
 49-52:  Right Trace
 
+The flashlight is the one pattern that spans all NUM_LEDS rather than a named
+segment above.
 */
 
 class BootstrapLeds
@@ -93,6 +95,7 @@ public:
         LED_Utils::registerPattern(&ScrollWheelPattern());
         LED_Utils::registerPattern(&LeftTraceFlowPattern());
         LED_Utils::registerPattern(&RightTraceFlowPattern());
+        LED_Utils::registerPattern(&FlashlightPattern());
 
         LED_Manager::init(NUM_LEDS, LEDBuffer(), LED_TASK_CPU_CORE);
 
@@ -101,6 +104,11 @@ public:
         auto buttonFlashPatternID = ButtonFlash::RegisteredPatternID();
         LED_Utils::enablePattern(buttonFlashPatternID);
         LED_Utils::setAnimationLengthMS(buttonFlashPatternID, 300);
+
+        // The flashlight stays enabled (but off) for the whole session — both
+        // LED_Utils::configurePattern and the single-iteration notification drop
+        // work for disabled patterns, so the Actions-menu toggle needs it live.
+        LED_Utils::enablePattern(Flashlight::RegisteredPatternID());
 
         // Trace flows — armed here, fired by the LoRa events wired below.
         for (int id : { LeftTraceFlowPattern().patternID(), RightTraceFlowPattern().patternID() })
@@ -112,6 +120,16 @@ public:
         _WireTraceFlows();
 
         DisplayModule::Utilities::getInputRaised() += [](const DisplayModule::InputContext &ctx) {
+            // A button flash fades its own LED down to black, which would leave a
+            // dark hole in a beam that owns the whole strip. Repaint the flashlight
+            // instead of animating — this also covers the presses used to walk out
+            // of the Actions menu right after switching it on.
+            if (FlashlightPattern().isOn())
+            {
+                LED_Utils::iteratePattern(Flashlight::RegisteredPatternID());
+                return;
+            }
+
             ESP_LOGI(TAG, "Button flash input: %d", ctx.inputID);
             JsonDocument cfg;
             cfg["inputID"] = ctx.inputID;
@@ -126,6 +144,13 @@ public:
 
         System_Utils::getDisablePowerSavings() += []() {
             digitalWrite(LED_EN_PIN, HIGH);
+
+            // Cutting LED_EN drops the strip's state, so a flashlight left on
+            // across a lock has to be redrawn on wake.
+            if (FlashlightPattern().isOn())
+            {
+                LED_Utils::iteratePattern(Flashlight::RegisteredPatternID());
+            }
         };
 
         // Play the shutdown fade before any other shutdown subscriber (e.g. the
@@ -193,6 +218,16 @@ public:
         return inputLeds;
     }
 
+    // v3 has no dedicated flashlight LEDs the way v1 and v2 did, so the
+    // flashlight drives the entire strip — buttons, traces, compass and knob
+    // ring all go white together to get as much light out of the device as
+    // possible.
+    static LedSegment &FlashlightSegment()
+    {
+        static LedSegment flashlight(LEDBuffer(), 0, NUM_LEDS);
+        return flashlight;
+    }
+
     static LedSegment LeftTraceSegment()
     {
         static LedSegment leftTrace(LEDBuffer(), LED_IDX_LEFT_TRACE, NUM_TRACE_LEDS);
@@ -226,6 +261,10 @@ public:
     // inward = one arriving. A fully black color falls back to the theme color.
     static void PlayTraceFlow(CRGB color, bool outward)
     {
+        // Same reason as the button flash: a trace clears its LEDs when the flow
+        // finishes, which would leave two dark gaps in the beam.
+        if (FlashlightPattern().isOn()) { return; }
+
         JsonDocument cfg;
         cfg["rOverride"] = color.r;
         cfg["gOverride"] = color.g;
@@ -293,6 +332,12 @@ public:
     {
         static ScrollWheel scrollWheel(EncoderRingSegment());
         return scrollWheel;
+    }
+
+    static Flashlight &FlashlightPattern()
+    {
+        static Flashlight flashlight(FlashlightSegment());
+        return flashlight;
     }
 
     static RingShutdown &ShutdownPattern()

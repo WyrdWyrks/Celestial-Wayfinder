@@ -549,7 +549,8 @@ namespace DisplayModule
         void _buildActionMenu(std::vector<DisplayModule::MenuItem> &menuItems)
         {
             // Register Quick Action Menu Items
-            #if HARDWARE_VERSION == 1 || HARDWARE_VERSION == 2
+            // Every hardware version registers a flashlight segment — a dedicated
+            // strip on v1/v2, the whole strip on v3 — so the toggle is unguarded.
             menuItems.push_back(DisplayModule::MenuItem("Flashlight", []()
             {
                 auto flashlightId = Flashlight::RegisteredPatternID();
@@ -558,7 +559,6 @@ namespace DisplayModule
                 LED_Utils::configurePattern(flashlightId, doc);
                 LED_Utils::iteratePattern(flashlightId);
             }));
-            #endif
 
             menuItems.push_back(DisplayModule::MenuItem("Create Status Message", [this]()
             {
