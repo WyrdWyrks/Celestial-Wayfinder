@@ -35,6 +35,17 @@ public:
             {
                 ESP_LOGI(TAG, "SH1107 Initialized.");
                 OledDisplay().clearDisplay();
+
+                // Push the panel refresh as high as the SH1107 will go. The
+                // Adafruit init leaves 0xD5 at 0x51 — nominal oscillator,
+                // divide-by-2 — which at 128 mux lands around 25-30Hz. That is
+                // slow enough that a phone camera's rolling shutter catches the
+                // panel mid-scan and records moving bands. 0xF0 is max
+                // oscillator, divide-by-1: ~3x the frame rate, no visible
+                // banding at ordinary shutter speeds.
+                static const uint8_t displayClock[] = { SH110X_SETDISPLAYCLOCKDIV, 0xF0 };
+                OledDisplay().oled_commandList(displayClock, sizeof(displayClock));
+
                 OledDisplay().setContrast(0x7F);
                 OledDisplay().setTextColor(DisplayModule::DrawCommand::DrawColorPrimary());
                 OledDisplay().display();
