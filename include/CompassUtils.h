@@ -27,6 +27,7 @@
 #include "HelperClasses/Window/CompassWindow.hpp"
 #if HARDWARE_VERSION >= 3
     #include "HelperClasses/Window/BreakoutWindow.hpp"
+    #include "HelperClasses/Window/GalagaWindow.hpp"
 #endif
 #include "GeolocationDebugWindow.hpp"
 #include "DiagnosticsWindow.hpp"
@@ -395,6 +396,10 @@ public:
         menuItems.push_back(DisplayModule::MenuItem("Breakout", []()
         {
             DisplayModule::Utilities::pushWindow(std::make_shared<DisplayModule::BreakoutWindow>());
+        }));
+        menuItems.push_back(DisplayModule::MenuItem("Galaga", []()
+        {
+            DisplayModule::Utilities::pushWindow(std::make_shared<DisplayModule::GalagaWindow>());
         }));
         #endif
         menuItems.push_back(DisplayModule::MenuItem("Reboot", []()
