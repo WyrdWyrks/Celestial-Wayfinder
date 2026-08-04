@@ -16,24 +16,6 @@ namespace DisplayModule
     const int32_t oob_x_max_100 = 12800+500;
     const int32_t oob_y_max_100 = 12800+500;
 
-    //helper function to detect if unit is OOB
-    bool is_out_of_bounds(int32_t position_x_100, int32_t position_y_100) {
-        if(position_y_100<oob_y_min_100||position_y_100>oob_y_max_100||position_x_100<oob_x_min_100||position_x_100>oob_x_max_100) { return true;}
-        return false;
-    }
-
-    // Fast 2D distance using integer math (scaled by 1024 to avoid floats)
-    int32_t euclidian_distance(int32_t dx, int32_t dy) {
-        int32_t abs_x = abs(dx);
-        int32_t abs_y = abs(dy);
-        int32_t max_val = (abs_x > abs_y) ? abs_x : abs_y;
-        int32_t min_val = (abs_x > abs_y) ? abs_y : abs_x;
-        
-        // 0.414 is approximately 424 / 1024
-        return max_val + ((424 * min_val) >> 10); 
-    }
-
-
     const int8_t sprite_atlas_w = 72;
     const int8_t sprite_atlas_h = 117;
 
@@ -193,7 +175,7 @@ namespace DisplayModule
 
     //after you kill a special enemy or 100% a challenging stage attack run, a bonus may trigger after the enemy's explode  anim
     enum BonusType {
-        NONE,
+        _NONE,
         _100,
         _200,
         _500,
@@ -210,39 +192,7 @@ namespace DisplayModule
         _10X,
         _20X
     };
-    
-    //converts between degrees x 100 and orientation value (for sprite mapping)
-    // x100 degrees to orientation
-    //     9000                 |       0
-    // 13500|    4500           | 7            1
-    //                          |
-    //--18000  0 --             | 6            2
-    //                          |
-    // 22500|  31500            | 5     4      3
-    //     27000                |
-    // orientation value brackets:
-    // 0 6750->11250      (>6750 AND <11250)
-    // 1 2250->6750       (>2250 AND <6750)
-    // 2 2250->33750      (>33750 OR <2250)
-    // 3 29250->33750     (>29250 AND <33750)
-    // 4 24750->29250     (>24750 AND < 29250)
-    // 5 20250->24750     (>20250 AND < 24750)
-    // 6 15750->20250     (>15750 AND < 20250)
-    // 7 11250->15750     (>11250 AND < 15750)
-    uint8_t orientation_code_from_orientation_degrees_100(int32_t orientation_degrees_100) {
-        orientation_degrees_100 = orientation_degrees_100%36000; //clamp to 0-360 degrees (0-360000 x100 degrees value)
 
-        if(orientation_degrees_100>6750&&orientation_degrees_100<=11250)       {return 0;}
-        else if(orientation_degrees_100>2250&&orientation_degrees_100<=6750)   {return 1;}
-        else if(orientation_degrees_100>33750||orientation_degrees_100<2250)   {return 2;}
-        else if(orientation_degrees_100>29250&&orientation_degrees_100<=33750) {return 3;}
-        else if(orientation_degrees_100>24750&&orientation_degrees_100<=29250) {return 4;}
-        else if(orientation_degrees_100>20250&&orientation_degrees_100<=24750) {return 5;}
-        else if(orientation_degrees_100>15750&&orientation_degrees_100<=20250) {return 6;}
-        else if(orientation_degrees_100>11250&&orientation_degrees_100<=15750) {return 7;}
-
-        return 0;
-    }
 
     //Pathfinding System and control 
     //A Path consists of a set of PathSegments
@@ -266,9 +216,10 @@ namespace DisplayModule
     enum PathSegmentType {
         FLY_THRU, 
         FLY_TO, 
-        FLY_STRAIGHT,      //fly in the current direction the unit is facing
-        TURN_LEFT_AUTO,    //turns solve for the tangent of the path to the next node
-                           //the unit will turn around turn_radius to try and line up with the straight line path to the next node
+        FLY_TO_MOVING_TARGET, //fly towards something that is itself moving
+        FLY_STRAIGHT,         //fly in the current direction the unit is facing
+        TURN_LEFT_AUTO,       //turns solve for the tangent of the path to the next node
+                              //the unit will turn around turn_radius to try and line up with the straight line path to the next node
         TURN_RIGHT_AUTO,
 
         TURN_LEFT_FIXED,
@@ -283,9 +234,14 @@ namespace DisplayModule
 
         int32_t turn_radius_100; //100X the turn radius in pixels of this node. Does nothing if this isn't a turn!
         int32_t turn_min_degrees_100 = 2250;//default to 22.5 degrees of turn minimum. This is to ensure some turning happens if we schedule a turn while facing almost the direction of the next straightline move segment
-        int32_t turn_max_degrees_100 = 38250;
+        int32_t turn_max_degrees_100 = 38250; //both of these are used for auto turns
 
         int32_t turn_degrees_100 = 500; //only used for fixed turns
+        int32_t initial_orientation_degrees_100=-1; //for turns, what was our initial orientation? n
+                                                    //needed to keep track of how far we've turned
+
+        int32_t orientation_target_degrees_100; //target in degrees to rotate to x100
+        int32_t orientation_rotate_speed_100 = -1; //amount of degreesx100 to rotate per tick 
 
         int32_t target_distance_100; //used for FLY_STRAIGHT
         int32_t distance_travelled_100=0; 
@@ -296,8 +252,7 @@ namespace DisplayModule
         int32_t target_pos_x_100; //100x the X coord of the FLY_THRU or FLY_TO value. Where it'll try to go. 
         int32_t target_pos_y_100; //         Y                           
 
-        int32_t orientation_target_degrees_100; //target in degrees to rotate to x100
-        int32_t orientation_rotate_speed_100 = 200; //amount of degrees to rotate per tick 
+
 
         PathSegmentType type=PathSegmentType::FLY_THRU;
 
@@ -308,6 +263,16 @@ namespace DisplayModule
     class Path {
         std::vector<PathSegment> path_segments;
         int32_t speed_multiplier_100 = 100; //This number / 100 is the speed multiplier for the entire path
+
+        int32_t euclidian_distance(int32_t dx, int32_t dy) {
+            int32_t abs_x = abs(dx);
+            int32_t abs_y = abs(dy);
+            int32_t max_val = (abs_x > abs_y) ? abs_x : abs_y;
+            int32_t min_val = (abs_x > abs_y) ? abs_y : abs_x;
+            
+            // 0.414 is approximately 424 / 1024
+            return max_val + ((424 * min_val) >> 10); 
+        }
 
         //travel straight in the direction of our current orientation
         //shoot_thru: do we want to fly through our target_pos_x/y?
@@ -331,28 +296,116 @@ namespace DisplayModule
             return return_value;
         }
 
+        uint32_t get_degrees_100_between_points(int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
+            int32_t delta_x_100 = x1 - x2;
+            int32_t delta_y_100 = y1 - y2;
+
+            float theta = atan2f(delta_x_100, delta_y_100);//angle, in radians, of the path from initial pos to position we're flying thru
+            float theta_deg = theta * (180/M_PI);
+            return (int32_t)(theta_deg*100.0); //get orientation in x100 degrees
+        }
+
         //used for FLY_THRU and FLY_TO. Sets the unit's orientation based on the correct orientation to fly_straight() to the 
         //FLY_THRU/TO CMD's target_pos_x_100 and target_pos_y_100 locations
         void test_set_orientation_to_point(int32_t * position_x_100, int32_t * position_y_100, int32_t * orientation_degrees_100) {
             //we just entered this state, set our inital pos and orientation
             if(this->path_segments.back().initial_position_x_100==-1||this->path_segments.back().initial_position_x_100==-1){
-                int32_t delta_x_100 = *position_x_100 - this->path_segments.back().target_pos_x_100;
-                int32_t delta_y_100 = *position_y_100 - this->path_segments.back().target_pos_y_100;
-
                 this->path_segments.back().initial_position_x_100=*position_x_100; //set initial pos so this if shouldn't run more than once per FLY_THRU command
                 this->path_segments.back().initial_position_y_100=*position_y_100;                            
 
-                float theta = atan2f(delta_x_100, delta_y_100);//angle, in radians, of the path from initial pos to position we're flying thru
-                float theta_deg = theta * (180/M_PI);
-                *orientation_degrees_100 = (int32_t)(theta_deg*100.0); //set orientation
+                *orientation_degrees_100 = get_degrees_100_between_points(*position_x_100, *position_y_100, this->path_segments.back().target_pos_x_100,this->path_segments.back().target_pos_y_100);
             }
+        }
+
+                //helper function to detect if unit is OOB
+        bool is_out_of_bounds(int32_t position_x_100, int32_t position_y_100) {
+            if(position_y_100<oob_y_min_100||position_y_100>oob_y_max_100||position_x_100<oob_x_min_100||position_x_100>oob_x_max_100) { return true;}
+            return false;
+        }
+
+        //this sets up turns to see if they've set their initial orientation (x100) and angular rotation speed (x100)
+        //angular rotation speed is calculated from a turn's speed_100 value
+        //deg_mag turn controls whether it is a left or right turn
+        int32_t set_theta_deg_100_from_speed_100(int32_t * initial_orientation_100, int32_t deg_mag_turn) {
+            if(this->path_segments.back().orientation_rotate_speed_100==-1||this->path_segments.back().initial_orientation_degrees_100==-1) {
+                int32_t r_turn_100 = this->path_segments.back().turn_radius_100;
+                int32_t speed_100 = this->path_segments.back().speed_100;
+                this->path_segments.back().orientation_rotate_speed_100 = (deg_mag_turn*(speed_100)*36000)/(2*M_PI*r_turn_100);
+                this->path_segments.back().initial_orientation_degrees_100 = *initial_orientation_100;
+            }
+        }
+
+        //checks if the amount we're about to turn results in overshooting the target orientation.
+        //returns how much we should turn.
+        //returns rot_speed_100 x100 degrees if we won't hit our target
+        //returns less if needed to perfectly hit deg_100_needed orientation
+        int32_t check_for_turn_overshoot(int32_t rot_speed_100, int32_t orientation_100, int32_t deg_100_needed) {
+            if(rot_speed_100<0) { //right turn, decreasing angle (we want our orientation to decrease towrads 100_needed)
+                //we could be at 1 degrees, and wrap around to 359
+                //we could also be at 359 degrees and decrease to 358
+                //it is possible for deg_100_needed to be greater than orientation
+                if(deg_100_needed>orientation_100) { 
+                    //if deg_100_needed is 359 and orientation is 1, orientation is less than deg100. We don't want that
+                    //so this shift should push deg_100 to 179 and orientation to 181
+                    deg_100_needed = (deg_100_needed-18000)%36000;
+                    orientation_100 = (orientation_100-18000)%36000;
+                }
+
+
+            } else { //left turn, increasing angle (we want our orientation to increase towards deg_100_needed)
+                //we could be at 359 degrees, and wrap around to 1 degrees
+                //we could also be at 1 degree and increase to 2 degrees
+                //it is possible for deg_100_needed to be less than orientation
+                if(deg_100_needed<orientation_100)
+                {
+                    deg_100_needed = (deg_100_needed+18000)%36000;
+                    orientation_100 = (orientation_100+18000)%36000;
+                    //if deg_100_needed is too high, this adjusts it away from the 0-36000 discontinuity
+                    //orientation_100 is adjusted too: but gets a modulo to ensure it is not negative after
+                    //this next part only works if 
+                }
+            }
+        }
+
+
+        //If ship turns theta_deg_100_to_turn in x100 degrees, will the ship be lined up to fly 
+        //to next segment's position?
+        //Returns -1 if it is not possible to align within theta_deg_100_to_turn amount of x100 degrees. (keep turning)        //returns the amount of x100 degrees needed to perfectly line up with the next target pos, if
+        //that required amount is less than theta_deg_100_to_turn.
+        //
+        int32_t check_if_alignable(int32_t * orientation_100, int32_t * position_x_100, int32_t * position_y_100) {
+            if (this->path_segments.size()<2) {
+                return -1;
+            } else { //a segment is ahead
+                PathSegment seg = this->path_segments[this->path_segments.size()-2];
+                //if type of the next segment is straight
+                if (seg.type==PathSegmentType::FLY_THRU||
+                    seg.type==PathSegmentType::FLY_TO||
+                    seg.type==PathSegmentType::FLY_TO_MOVING_TARGET){
+
+                    //figure out angle needed to point our ship at the target
+                    int32_t deg_100_needed = get_degrees_100_between_points(*position_x_100,*position_y_100,
+                        seg.target_pos_x_100,seg.target_pos_y_100);
+
+                    //determine if this rotation 
+                    int32_t rot_speed_100 = this->path_segments.back().orientation_rotate_speed_100;
+                    
+                    int32_t amount_to_turn = check_for_turn_overshoot(rot_speed_100, *orientation_100, deg_100_needed);
+                    
+
+                }
+            }
+
         }
 
         public: 
             bool follow(int32_t * position_x_100, int32_t * position_y_100, int32_t * orientation_degrees_100) {
                 //*position_x_100 = 
                 if(path_segments.size()<1) {return false; }//can't follow an empty path
+
+                int32_t deg_mag_turn = -1; //default to turns subtracting degrees (Right turn)
                 switch (this->path_segments.back().type) {
+
                     case PathSegmentType::FLY_STRAIGHT:
                     {
                         fly_straight(position_x_100,position_y_100,orientation_degrees_100);
@@ -404,9 +457,22 @@ namespace DisplayModule
 
                     }
                     break;
-                    case PathSegmentType::TURN_LEFT_AUTO:
+                    case PathSegmentType::TURN_LEFT_AUTO:  //left turns add degrees
+                        deg_mag_turn=1; //override Right-turn default 
+                    case PathSegmentType::TURN_RIGHT_AUTO: //right turns subtract degrees
+                        //holy shit! a real use of switch case fallthrough!
+                        set_theta_deg_100_from_speed_100(orientation_degrees_100,deg_mag_turn);
+                        //int32_t turn_theta_100 = deg_mag_turn*theta_deg_100_from_speed_100(this->path_segments.back().speed_100,this->path_segments.back().turn_radius_100);
+                        int32_t actual_turn_value_100 = check_if_alignable(orientation_degrees_100,position_x_100,position_y_100);
 
-                    case PathSegmentType::TURN_RIGHT_AUTO:
+                        if(actual_turn_value_100==-1){
+                            //can't reach target, so turn as much as possible
+                            *orientation_degrees_100+=this->path_segments.back().orientation_rotate_speed_100; //rotate ship
+                        } else {
+                            //can reach target, turn actual turn value amount
+                            *orientation_degrees_100+=actual_turn_value_100;
+                            this->path_segments.pop_back(); // kill seg, we've finished turning
+                        }
 
                     break;  
                     case PathSegmentType::TURN_LEFT_FIXED:
@@ -422,27 +488,6 @@ namespace DisplayModule
             }
     };
 
-    std::vector<LevelTickType> getTickListForStage(uint8_t stage) {
-        uint8_t num_20_ticks = stage/20;
-        uint8_t remainder_20 = stage%20;
-
-        uint8_t num_10_ticks = remainder_20/10;
-        uint8_t remainder_10 = remainder_20%10;
-
-        uint8_t num_5_ticks = remainder_10/5;
-        uint8_t remainder_5 = remainder_10%5;
-
-        uint8_t num_1_ticks = remainder_5;
-
-        std::vector<LevelTickType> return_tick_list = {};
-
-        for(int i=0;i<num_1_ticks;i++) { return_tick_list.push_back(LevelTickType::_1X);}
-        for(int i=0;i<num_5_ticks;i++) { return_tick_list.push_back(LevelTickType::_5X);}
-        for(int i=0;i<num_10_ticks;i++) { return_tick_list.push_back(LevelTickType::_10X);}
-        for(int i=0;i<num_20_ticks;i++) { return_tick_list.push_back(LevelTickType::_20X);}     
-
-        return return_tick_list;                   
-    }
 
     class Unit {
         int8_t x_center_;
@@ -453,7 +498,15 @@ namespace DisplayModule
 
         Type type = PLAYER;
 
-
+        int32_t euclidian_distance(int32_t dx, int32_t dy) {
+            int32_t abs_x = abs(dx);
+            int32_t abs_y = abs(dy);
+            int32_t max_val = (abs_x > abs_y) ? abs_x : abs_y;
+            int32_t min_val = (abs_x > abs_y) ? abs_y : abs_x;
+            
+            // 0.414 is approximately 424 / 1024
+            return max_val + ((424 * min_val) >> 10); 
+        }
 
 
 
@@ -477,7 +530,7 @@ namespace DisplayModule
                 
                 int32_t dx = abs(this->x_center_-x_other);
                 int32_t dy = abs(this->y_center_-y_other); 
-                int32_t distance = fastDist2D2(dx,dy);
+                int32_t distance = euclidian_distance(dx,dy);
                 if (distance<=(coll_radius_other+this->collision_radius)) {
                     return true;
                 }
@@ -625,6 +678,61 @@ namespace DisplayModule
         uint8_t _lives=3;
 
         Unit player;
+
+        std::vector<LevelTickType> getTickListForStage(uint8_t stage) {
+            uint8_t num_20_ticks = stage/20;
+            uint8_t remainder_20 = stage%20;
+
+            uint8_t num_10_ticks = remainder_20/10;
+            uint8_t remainder_10 = remainder_20%10;
+
+            uint8_t num_5_ticks = remainder_10/5;
+            uint8_t remainder_5 = remainder_10%5;
+
+            uint8_t num_1_ticks = remainder_5;
+
+            std::vector<LevelTickType> return_tick_list = {};
+
+            for(int i=0;i<num_1_ticks;i++) { return_tick_list.push_back(LevelTickType::_1X);}
+            for(int i=0;i<num_5_ticks;i++) { return_tick_list.push_back(LevelTickType::_5X);}
+            for(int i=0;i<num_10_ticks;i++) { return_tick_list.push_back(LevelTickType::_10X);}
+            for(int i=0;i<num_20_ticks;i++) { return_tick_list.push_back(LevelTickType::_20X);}     
+
+            return return_tick_list;                   
+        }
+        //converts between degrees x 100 and orientation value (for sprite mapping)
+        // x100 degrees to orientation
+        //     9000                 |       0
+        // 13500|    4500           | 7            1
+        //                          |
+        //--18000  0 --             | 6            2
+        //                          |
+        // 22500|  31500            | 5     4      3
+        //     27000                |
+        // orientation value brackets:
+        // 0 6750->11250      (>6750 AND <11250)
+        // 1 2250->6750       (>2250 AND <6750)
+        // 2 2250->33750      (>33750 OR <2250)
+        // 3 29250->33750     (>29250 AND <33750)
+        // 4 24750->29250     (>24750 AND < 29250)
+        // 5 20250->24750     (>20250 AND < 24750)
+        // 6 15750->20250     (>15750 AND < 20250)
+        // 7 11250->15750     (>11250 AND < 15750)
+
+        uint8_t orientation_code_from_orientation_degrees_100(int32_t orientation_degrees_100) {
+            orientation_degrees_100 = orientation_degrees_100%36000; //clamp to 0-360 degrees (0-360000 x100 degrees value)
+
+            if(orientation_degrees_100>6750&&orientation_degrees_100<=11250)       {return 0;}
+            else if(orientation_degrees_100>2250&&orientation_degrees_100<=6750)   {return 1;}
+            else if(orientation_degrees_100>33750||orientation_degrees_100<2250)   {return 2;}
+            else if(orientation_degrees_100>29250&&orientation_degrees_100<=33750) {return 3;}
+            else if(orientation_degrees_100>24750&&orientation_degrees_100<=29250) {return 4;}
+            else if(orientation_degrees_100>20250&&orientation_degrees_100<=24750) {return 5;}
+            else if(orientation_degrees_100>15750&&orientation_degrees_100<=20250) {return 6;}
+            else if(orientation_degrees_100>11250&&orientation_degrees_100<=15750) {return 7;}
+
+            return 0;
+        }
 
         void _resetGame()
         {
