@@ -213,13 +213,13 @@ public:
         auto colorTheme = std::make_shared<FilesystemModule::EnumSetting>("Theme Color", 2, colorThemeOptions, colorThemeValues);
         settings.push_back(colorTheme);
 
-        auto themeRed = std::make_shared<FilesystemModule::IntSetting>("Theme Color Red", 0, 0, 255, 1);
+        auto themeRed = std::make_shared<FilesystemModule::IntSetting>("Theme Red", 0, 0, 255, 1);
         settings.push_back(themeRed);
 
-        auto themeGreen = std::make_shared<FilesystemModule::IntSetting>("Theme Color Green", 255, 0, 255, 1);
+        auto themeGreen = std::make_shared<FilesystemModule::IntSetting>("Theme Green", 255, 0, 255, 1);
         settings.push_back(themeGreen);
 
-        auto themeBlue = std::make_shared<FilesystemModule::IntSetting>("Theme Color Blue", 0, 0, 255, 1);
+        auto themeBlue = std::make_shared<FilesystemModule::IntSetting>("Theme Blue", 0, 0, 255, 1);
         settings.push_back(themeBlue);        
 
         System_Utils::GenerateDefaultSettings(settings);
@@ -230,7 +230,7 @@ public:
         auto wifiProvisioning = std::make_shared<FilesystemModule::EnumSetting>("WiFi Mode", 0, wifiOptions, wifiValues);
         settings.push_back(wifiProvisioning);
 
-        auto wifiapPassword = std::make_shared<FilesystemModule::StringSetting>("WiFi AP Password", defaultApPassword, 21);
+        auto wifiapPassword = std::make_shared<FilesystemModule::StringSetting>("WiFi Password", defaultApPassword, 21);
         settings.push_back(wifiapPassword);
 
         // Position reported by the StaticLocation geolocation source, defaulting
@@ -264,9 +264,9 @@ public:
             // LED Module
             int colorTheme = doc["Theme Color"].as<int>();
 
-            uint8_t red = doc["Theme Color Red"].as<uint8_t>();
-            uint8_t green = doc["Theme Color Green"].as<uint8_t>();
-            uint8_t blue = doc["Theme Color Blue"].as<uint8_t>();
+            uint8_t red = doc["Theme Red"].as<uint8_t>();
+            uint8_t green = doc["Theme Green"].as<uint8_t>();
+            uint8_t blue = doc["Theme Blue"].as<uint8_t>();
 
             std::unordered_map<int, CRGB> presetThemeColors = 
             {

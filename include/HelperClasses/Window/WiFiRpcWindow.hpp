@@ -86,7 +86,7 @@ namespace DisplayModule
             char ssidBuffer[20];
             sprintf(ssidBuffer, "ESP-CFG-%04X", deviceID & 0xFFFF);
             _ssid = ssidBuffer;
-            _password = FilesystemModule::Utilities::FetchStringSetting("WiFi AP Password", "esp-pass");
+            _password = FilesystemModule::Utilities::FetchStringSetting("WiFi Password", "esp-pass");
         }
 
         void _buildDrawCommands()
