@@ -16,15 +16,12 @@ public:
         _dio0(dio0),
         _loraFrequency(loraFrequency)
     {
-        _instance = this;
     }
 
     bool Init()
     {
         ESP_LOGI(TAG_LORA, "Initializing LoRa...");
 
-        static StaticSemaphore_t cadSemBuf;
-        _cadSemaphore = xSemaphoreCreateBinaryStatic(&cadSemBuf);
         if (_spi == nullptr)
         {
             ESP_LOGW(TAG_LORA, "No valid Spi bus detected");
@@ -56,46 +53,58 @@ public:
         LoRa.setSignalBandwidth(500E3);
         LoRa.setPreambleLength(12);
         LoRa.setSPIFrequency(_spiFrequency);
+        LoRa.enableCrc();
+
+        // Append a payload CRC and set the CRC-present bit in the explicit
+        // header, so corrupted packets are dropped by the modem instead of
+        // being handed up as valid. Receivers recover the flag from the header,
+        // so this is safe to roll out to a fleet one device at a time.
+        //
+        // setSpreadingFactor() above masks the low nibble of REG_MODEM_CONFIG_2
+        // when it writes, so this survives the later SetSpreadingFactor() call
+        // from the bootstrap.
+        LoRa.enableCrc();
+
         return result;
     }
 
-    bool ReceiveMessage(uint8_t* buffer, size_t& outLen, size_t timeout) override
+    bool ReceiveMessage(uint8_t* buffer, size_t capacity, size_t& outLen, size_t timeout) override
     {
-        // Interrupt mode: library ISR already buffered the packet into its internal state
-        // (_rxPacketLength set, FIFO pointer ready, IRQ flags cleared).
-        // LoRa.available() reflects this without needing parsePacket().
-        if (LoRa.available() > 0)
-        {
-            outLen = 0;
-            while (LoRa.available())
-            {
-                buffer[outLen++] = (uint8_t)(LoRa.read() & 0xFF);
-            }
-            return outLen > 0;
-        }
+        outLen = 0;
 
-        // Polling fallback (used when timeout > 0 or no ISR registered)
+        // parsePacket() does the work the interrupt used to do — read and clear
+        // the IRQ flags, latch the payload length, point the FIFO at the packet
+        // — but on this task, where nothing can move the cursors underneath us.
+        // It also skips packets the modem flagged as CRC errors.
         auto startTime = xTaskGetTickCount();
         do
         {
-            if (LoRa.parsePacket() == 0) { continue; }
-
-            outLen = 0;
-            while (LoRa.available())
+            int len = LoRa.parsePacket();
+            if (len > 0)
             {
-                buffer[outLen++] = (uint8_t)(LoRa.read() & 0xFF);
-            }
+                size_t want = (size_t)len;
+                if (want > capacity)
+                {
+                    ESP_LOGW(TAG_LORA, "Packet of %d bytes exceeds %u-byte buffer — truncating",
+                             len, (unsigned)capacity);
+                    want = capacity;
+                }
 
-            return outLen > 0;
+                int got = LoRa.readPacket(buffer, (int)want);
+                outLen = (got > 0) ? (size_t)got : 0;
+                return outLen > 0;
+            }
         }
         while ((xTaskGetTickCount() - startTime) < timeout);
 
         return false;
     }
 
-    void RegisterOnReceive(void(*callback)(int)) override
+    void RegisterOnReceive(void(*callback)()) override
     {
-        LoRa.onReceive(callback);
+        // Deferred mode: the interrupt performs no SPI and mutates no driver
+        // state, so it cannot corrupt a read in progress here.
+        LoRa.onDio0Deferred(callback);
     }
 
     void StartReceiving() override
@@ -110,22 +119,26 @@ public:
 
     bool IsChannelBusy() override
     {
-        xSemaphoreTake(_cadSemaphore, 0);  // drain any stale give from a previous scan
-
         // SX127x requires Standby before CAD — going directly from RX to CAD
         // can leave the radio in an undefined state on some silicon revisions.
         LoRa.idle();
 
-        LoRa.onCadDone(_onCadDone);
         LoRa.channelActivityDetection();
 
-        // Block until the DIO0 CadDone interrupt fires (~2 ms at SF7/125 kHz)
-        if (xSemaphoreTake(_cadSemaphore, pdMS_TO_TICKS(50)) != pdTRUE)
+        // Poll for completion rather than waiting on the CAD interrupt: in
+        // deferred mode the interrupt does no SPI, so it cannot tell us whether
+        // this was CadDone or RxDone. CAD takes ~2 ms at SF7, and the 50 ms
+        // budget matches the timeout this replaced.
+        const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(50);
+        while (xTaskGetTickCount() < deadline)
         {
-            ESP_LOGW(TAG_LORA, "CAD timeout — assuming clear");
-            return false;
+            int cad = LoRa.parseCad();
+            if (cad >= 0) { return cad == 1; }
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
-        return _cadResult;
+
+        ESP_LOGW(TAG_LORA, "CAD timeout — assuming clear");
+        return false;
     }
 
     bool SendMessage(const uint8_t* buffer, size_t len) override
@@ -185,13 +198,4 @@ protected:
     int _dio0;
 
     uint32_t _loraFrequency;
-
-private:
-    // Defined in EventDeclarations.cpp so IRAM_ATTR body is in a .cpp translation unit
-    // (Xtensa l32r cannot reference flash literals from an inline IRAM function in a header)
-    static void IRAM_ATTR _onCadDone(bool channelBusy);
-
-    inline static SemaphoreHandle_t _cadSemaphore = nullptr;
-    inline static ArduinoLoRaDriver* _instance = nullptr;
-    bool _cadResult = false;
 };

@@ -39,7 +39,7 @@ void IRAM_ATTR encButtonISR();
 // void IRAM_ATTR buttonSOSISR();
 void IRAM_ATTR enc_cb(void *arg);
 void IRAM_ATTR CompassDRDYISR();
-void IRAM_ATTR LoRaReceiveISR(int packetSize);
+void IRAM_ATTR LoRaReceiveISR();
 
 void enableInterrupts();
 void disableInterrupts();

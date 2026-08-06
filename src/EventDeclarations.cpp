@@ -256,24 +256,17 @@ void IRAM_ATTR CompassDRDYISR()
     // Navigation_Manager::read();
 }
 
-void IRAM_ATTR LoRaReceiveISR(int packetSize)
+// Runs in interrupt context and does nothing but wake the radio task. No SPI,
+// no logging — the radio task reads the packet length and the FIFO itself, so
+// nothing here can race a read already in progress.
+void IRAM_ATTR LoRaReceiveISR()
 {
-    ESP_EARLY_LOGI(TAG, "LoRaReceiveISR: %d", packetSize);
     if (radioReadTaskHandle != nullptr)
     {
         BaseType_t higherPriorityTaskWoken = pdFALSE;
         vTaskNotifyGiveFromISR(radioReadTaskHandle, &higherPriorityTaskWoken);
         portYIELD_FROM_ISR(higherPriorityTaskWoken);
     }
-}
-
-void IRAM_ATTR ArduinoLoRaDriver::_onCadDone(bool channelBusy)
-{
-    if (_instance == nullptr) { return; }
-    _instance->_cadResult = channelBusy;
-    BaseType_t woken = pdFALSE;
-    xSemaphoreGiveFromISR(_cadSemaphore, &woken);
-    portYIELD_FROM_ISR(woken);
 }
 
 // void enableInterrupts()

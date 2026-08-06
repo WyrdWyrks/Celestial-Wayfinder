@@ -176,6 +176,12 @@ public:
         // so two units running identical firmware can't share DRBG state.
         EncryptionUtils::SeedRng("CelestialWayfinder-" + std::to_string(System_Utils::DeviceID));
 
+        // Seeds plain rand(), which the LoRa send backoff uses to decorrelate
+        // transmissions. Unseeded it defaults to 1 on every device, so a group
+        // of units powered up together draws the identical backoff sequence and
+        // relays the same packet at the same instant, every time.
+        srand(esp_random());
+
         bootloader_random_disable();
     }
 
