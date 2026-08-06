@@ -53,6 +53,7 @@ public:
         LoRa.setSignalBandwidth(500E3);
         LoRa.setPreambleLength(12);
         LoRa.setSPIFrequency(_spiFrequency);
+        LoRa.enableCrc();
 
         // Append a payload CRC and set the CRC-present bit in the explicit
         // header, so corrupted packets are dropped by the modem instead of
