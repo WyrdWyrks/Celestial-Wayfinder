@@ -39,8 +39,8 @@ public:
         // so the radio does not enter RX mode until the task handle is set.
         Driver().RegisterOnReceive(LoRaReceiveISR);
 
-        System_Utils::registerTask(BootstrapLora::RadioTaskRunner,    "radio-task",      4096, nullptr, 3, BootstrapMicrocontroller::CPU_CORE_LORA);
-        System_Utils::registerTask(BootstrapLora::SendQueueTaskRunner,"send-queue-task", 4096, nullptr, 2, BootstrapMicrocontroller::CPU_CORE_LORA);
+        System_Utils::registerTask(BootstrapLora::RadioTaskRunner,    "radio-task",      8192, nullptr, 3, BootstrapMicrocontroller::CPU_CORE_LORA);
+        System_Utils::registerTask(BootstrapLora::SendQueueTaskRunner,"send-queue-task", 8192, nullptr, 2, BootstrapMicrocontroller::CPU_CORE_LORA);
     
         LoraModule::Utilities::MessageTypeReceived(PingMessage::GUID) += CompassUtils::PassMessageReceivedToDisplay;
     }
