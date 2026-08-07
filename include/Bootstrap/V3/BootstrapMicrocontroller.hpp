@@ -106,6 +106,14 @@ public:
         {
             ESP_LOGI(TAG, "BQ25672 initialized");
             Charger().setShipFetPresent(true);
+
+            // EN_IBAT powers the IBAT ADC's discharge half. It comes up disabled,
+            // and without it IBAT reads 0 whenever the pack is sourcing current —
+            // charge current would still be reported, discharge never would.
+            if (!Charger().setIbatDischargeSensingEnabled(true))
+            {
+                ESP_LOGW(TAG, "BQ25672 failed to enable IBAT discharge sensing");
+            }
         }
 
         System_Utils::getSystemShutdown() += []()
@@ -144,6 +152,99 @@ public:
             if (mv >= 3200) return      (long)(mv - 3200) * 10 / 300;  // 3200-3500 -> 0-10
             return 0;
         });
+
+        // Feed the PMIC rails to the "Diagnostic Info" screen. Runs on the
+        // display task at its refresh rate; these are plain I2C register reads,
+        // same as the battery callback above already does from that task.
+        System_Utils::registerDiagnosticsProvider([]() -> std::vector<std::string> {
+            std::vector<std::string> lines;
+            char buf[32];
+
+            uint16_t mv;
+            if (Charger().readVbat_mV(mv))
+            {
+                snprintf(buf, sizeof(buf), "Vbat: %u.%03uV", mv / 1000, mv % 1000);
+            }
+            else
+            {
+                snprintf(buf, sizeof(buf), "Vbat: --");
+            }
+            lines.emplace_back(buf);
+
+            // Input current drawn from VBUS.
+            int16_t ibusMa;
+            if (Charger().readIbus_mA(ibusMa))
+            {
+                snprintf(buf, sizeof(buf), "Ibus: %dmA", ibusMa);
+            }
+            else
+            {
+                snprintf(buf, sizeof(buf), "Ibus: --");
+            }
+            lines.emplace_back(buf);
+
+            // IBAT is signed: positive while the pack is charging, negative
+            // while it is sourcing current. Shown raw, then split into charge
+            // and discharge so neither number needs its sign interpreted.
+            int16_t ibatMa;
+            if (Charger().readIbat_mA(ibatMa))
+            {
+                snprintf(buf, sizeof(buf), "Ibat: %dmA", ibatMa);
+                lines.emplace_back(buf);
+                snprintf(buf, sizeof(buf), "Chg:  %dmA", ibatMa > 0 ? ibatMa : 0);
+                lines.emplace_back(buf);
+                snprintf(buf, sizeof(buf), "Dchg: %dmA", ibatMa < 0 ? -ibatMa : 0);
+                lines.emplace_back(buf);
+            }
+            else
+            {
+                lines.emplace_back("Ibat: --");
+                lines.emplace_back("Chg:  --");
+                lines.emplace_back("Dchg: --");
+            }
+
+            uint16_t limitMa;
+            if (Charger().getChargeCurrentLimit_mA(limitMa))
+            {
+                snprintf(buf, sizeof(buf), "Ilim: %umA", limitMa);
+            }
+            else
+            {
+                snprintf(buf, sizeof(buf), "Ilim: --");
+            }
+            lines.emplace_back(buf);
+
+            BQ25672::Stat1 stat1;
+            if (Charger().getStatus1(stat1))
+            {
+                snprintf(buf, sizeof(buf), "State: %s", _ChargeStateLabel(stat1.chg_status));
+            }
+            else
+            {
+                snprintf(buf, sizeof(buf), "State: --");
+            }
+            lines.emplace_back(buf);
+
+            return lines;
+        });
+    }
+
+    // BQ25672::chargeStatusToString returns prose ("Charge terminated") that
+    // overruns the 21-character line the 128px panel gives us at text size 1.
+    // These are the same states, abbreviated to fit.
+    static const char *_ChargeStateLabel(BQ25672::ChargeStatus status)
+    {
+        switch (status)
+        {
+            case BQ25672::ChargeStatus::NotCharging:     return "Idle";
+            case BQ25672::ChargeStatus::TrickleCharge:   return "Trickle";
+            case BQ25672::ChargeStatus::PreCharge:       return "Precharge";
+            case BQ25672::ChargeStatus::FastCharge_CC:   return "Fast CC";
+            case BQ25672::ChargeStatus::TaperCharge_CV:  return "Taper CV";
+            case BQ25672::ChargeStatus::TopOffActive:    return "Top-off";
+            case BQ25672::ChargeStatus::TerminationDone: return "Done";
+            default:                                     return "Unknown";
+        }
     }
 
     static void EnableInterrupts()
