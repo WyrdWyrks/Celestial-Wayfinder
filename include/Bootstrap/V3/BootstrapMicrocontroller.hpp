@@ -106,6 +106,9 @@ public:
         {
             ESP_LOGI(TAG, "BQ25672 initialized");
             Charger().setShipFetPresent(true);
+            // We don't use the watchdog timer, and this can prevent the I2C messages
+            // from updating in the diagnostics screen.
+            Charger().setWatchdogTimer(BQ25672::WatchdogTimer::Disabled);
 
             // EN_IBAT powers the IBAT ADC's discharge half. It comes up disabled,
             // and without it IBAT reads 0 whenever the pack is sourcing current —
@@ -183,24 +186,15 @@ public:
             }
             lines.emplace_back(buf);
 
-            // IBAT is signed: positive while the pack is charging, negative
-            // while it is sourcing current. Shown raw, then split into charge
-            // and discharge so neither number needs its sign interpreted.
             int16_t ibatMa;
             if (Charger().readIbat_mA(ibatMa))
             {
                 snprintf(buf, sizeof(buf), "Ibat: %dmA", ibatMa);
                 lines.emplace_back(buf);
-                snprintf(buf, sizeof(buf), "Chg:  %dmA", ibatMa > 0 ? ibatMa : 0);
-                lines.emplace_back(buf);
-                snprintf(buf, sizeof(buf), "Dchg: %dmA", ibatMa < 0 ? -ibatMa : 0);
-                lines.emplace_back(buf);
             }
             else
             {
                 lines.emplace_back("Ibat: --");
-                lines.emplace_back("Chg:  --");
-                lines.emplace_back("Dchg: --");
             }
 
             uint16_t limitMa;
@@ -236,9 +230,9 @@ public:
     {
         switch (status)
         {
-            case BQ25672::ChargeStatus::NotCharging:     return "Idle";
+            case BQ25672::ChargeStatus::NotCharging:     return "Not Charging";
             case BQ25672::ChargeStatus::TrickleCharge:   return "Trickle";
-            case BQ25672::ChargeStatus::PreCharge:       return "Precharge";
+            case BQ25672::ChargeStatus::PreCharge:       return "Pre-charge";
             case BQ25672::ChargeStatus::FastCharge_CC:   return "Fast CC";
             case BQ25672::ChargeStatus::TaperCharge_CV:  return "Taper CV";
             case BQ25672::ChargeStatus::TopOffActive:    return "Top-off";
