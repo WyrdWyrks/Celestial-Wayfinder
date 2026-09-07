@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Bootstrap/V3/BootstrapMicrocontroller.hpp"
-#include "LoraManager.hpp"
-#include "HelperClasses/LoRaDriver/ArduinoLoRaDriver.h"
 #include "HelperClasses/PingMessage.hpp"
 #include "HelperClasses/WayfinderLoraState.hpp"
 #include "EventDeclarations.h"
@@ -14,6 +12,14 @@ namespace
     const uint8_t V3_LORA_DIO0 = 48;
     const uint8_t V3_LORA_TX   = 23;
 }
+
+#ifndef USE_MESHCORE_LORA
+// =============================================================================
+// Legacy stack: Blake-Ballew/arduino-LoRa fork + hand-rolled flood engine.
+// =============================================================================
+
+#include "LoraManager.hpp"
+#include "HelperClasses/LoRaDriver/ArduinoLoRaDriver.h"
 
 class BootstrapLora
 {
@@ -41,7 +47,7 @@ public:
 
         System_Utils::registerTask(BootstrapLora::RadioTaskRunner,    "radio-task",      8192, nullptr, 3, BootstrapMicrocontroller::CPU_CORE_LORA);
         System_Utils::registerTask(BootstrapLora::SendQueueTaskRunner,"send-queue-task", 8192, nullptr, 2, BootstrapMicrocontroller::CPU_CORE_LORA);
-    
+
         LoraModule::Utilities::MessageTypeReceived(PingMessage::GUID) += CompassUtils::PassMessageReceivedToDisplay;
     }
 
@@ -69,3 +75,96 @@ public:
         Manager().SendQueueTask();
     }
 };
+
+#else
+// =============================================================================
+// MeshCore stack (Phase 1). RadioLib SX1276 + MeshCore routing engine, one
+// wait-discipline task. PingMessage / facade wiring lands in Phase 2 — for now
+// the mesh comes up and a hardcoded group-datagram round-trip is bench-testable
+// from the serial log.
+// =============================================================================
+
+#include <helpers/ArduinoHelpers.h>
+#include <helpers/StaticPoolPacketManager.h>
+
+#include "HelperClasses/LoRaDriver/RadioLibLoRaDriver.hpp"
+#include "HelperClasses/LoRaDriver/MeshBoard.hpp"
+#include "ModuleManagers/LoraMeshManager.hpp"
+#include "HelperClasses/Mesh/MeshTables.hpp"
+#include "HelperClasses/Mesh/MeshTimeClock.hpp"
+
+class BootstrapLora
+{
+public:
+    static void Initialize()
+    {
+        WayfinderLoraState::Init();
+
+        // Seed the PRNG before identity generation — an unseeded StdRNG would
+        // give every fresh device the same Ed25519 key and DeviceID.
+        Rng().begin(static_cast<long>(esp_random()));
+
+        if (!Manager().Begin())
+        {
+            ESP_LOGE("BootstrapLora", "MeshCore init failed");
+            return;
+        }
+
+        // Phase 1 bench beacon: a hardcoded group datagram every ~10 s so the
+        // A->B (and relayed) round-trip is visible in the serial log. Removed
+        // when PingMessage rides the channel for real in Phase 2.
+        Manager().OnLoopTick = []()
+        {
+            static uint32_t last = 0;
+            uint32_t now = millis();
+            if (now - last < 10000) { return; }
+            last = now;
+
+            char msg[48];
+            int n = snprintf(msg, sizeof(msg), "beacon %08X #%lu",
+                             (unsigned)System_Utils::DeviceID, (unsigned long)(now / 10000));
+            Manager().SendTestDatagram(reinterpret_cast<const uint8_t*>(msg), (size_t)n);
+            ESP_LOGI("BootstrapLora", "beacon sent (echoes so far: %u)", Manager().EchoCount());
+        };
+
+        System_Utils::registerTask(BootstrapLora::MeshTaskRunner, "mesh-task", 8192, nullptr,
+                                   3, BootstrapMicrocontroller::CPU_CORE_LORA);
+    }
+
+    static MeshBoard& Board()
+    {
+        static MeshBoard board;
+        return board;
+    }
+
+    static LoraModule::RadioLibLoRaDriver& Driver()
+    {
+        static LoraModule::RadioLibLoRaDriver driver(
+            BootstrapMicrocontroller::SpiBus(),
+            V3_LORA_CS, V3_LORA_RST, V3_LORA_DIO0, RADIOLIB_NC,
+            Board(),
+            LoraModule::ChannelToHz(LoraModule::LORA_CHANNEL_DEFAULT) / 1000000.0f,
+            static_cast<int8_t>(V3_LORA_TX));
+        return driver;
+    }
+
+    static ArduinoMillis&           MillisClock() { static ArduinoMillis c;                 return c; }
+    static StdRNG&                  Rng()         { static StdRNG r;                          return r; }
+    static LoraModule::MeshTimeClock& RtcClock()  { static LoraModule::MeshTimeClock c;      return c; }
+    static StaticPoolPacketManager& Packets()     { static StaticPoolPacketManager m(16);    return m; }
+    static LoraModule::MeshTables&  Tables()       { static LoraModule::MeshTables t;         return t; }
+
+    static LoraModule::MeshManager& Manager()
+    {
+        static LoraModule::MeshManager manager(Driver(), MillisClock(), Rng(),
+                                               RtcClock(), Packets(), Tables());
+        return manager;
+    }
+
+    static void MeshTaskRunner(void* /*pvParameters*/)
+    {
+        Manager().Loop();
+    }
+};
+
+#endif // USE_MESHCORE_LORA
