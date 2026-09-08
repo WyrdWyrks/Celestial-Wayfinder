@@ -78,10 +78,9 @@ public:
 
 #else
 // =============================================================================
-// MeshCore stack (Phase 1). RadioLib SX1276 + MeshCore routing engine, one
-// wait-discipline task. PingMessage / facade wiring lands in Phase 2 — for now
-// the mesh comes up and a hardcoded group-datagram round-trip is bench-testable
-// from the serial log.
+// MeshCore stack (Phases 1-2). RadioLib SX1276 + MeshCore routing engine, one
+// wait-discipline task. App PingMessages ride the group channel through the
+// unchanged LoraModule::Utilities facade.
 // =============================================================================
 
 #include <helpers/ArduinoHelpers.h>
@@ -92,6 +91,7 @@ public:
 #include "ModuleManagers/LoraMeshManager.hpp"
 #include "HelperClasses/Mesh/MeshTables.hpp"
 #include "HelperClasses/Mesh/MeshTimeClock.hpp"
+#include "FilesystemUtils.h"
 
 class BootstrapLora
 {
@@ -104,28 +104,19 @@ public:
         // give every fresh device the same Ed25519 key and DeviceID.
         Rng().begin(static_cast<long>(esp_random()));
 
+        // Begin() reads the persisted Channel Key itself; runtime changes flow
+        // through LoraModule::Utilities::UpdateSettings(), which in this build is
+        // the single consumer of "Channel Key" and routes straight to
+        // MeshManager::ApplyChannelKey(). No subscription needed here.
+
         if (!Manager().Begin())
         {
             ESP_LOGE("BootstrapLora", "MeshCore init failed");
             return;
         }
 
-        // Phase 1 bench beacon: a hardcoded group datagram every ~10 s so the
-        // A->B (and relayed) round-trip is visible in the serial log. Removed
-        // when PingMessage rides the channel for real in Phase 2.
-        Manager().OnLoopTick = []()
-        {
-            static uint32_t last = 0;
-            uint32_t now = millis();
-            if (now - last < 10000) { return; }
-            last = now;
-
-            char msg[48];
-            int n = snprintf(msg, sizeof(msg), "beacon %08X #%lu",
-                             (unsigned)System_Utils::DeviceID, (unsigned long)(now / 10000));
-            Manager().SendTestDatagram(reinterpret_cast<const uint8_t*>(msg), (size_t)n);
-            ESP_LOGI("BootstrapLora", "beacon sent (echoes so far: %u)", Manager().EchoCount());
-        };
+        LoraModule::Utilities::RegisterMessageType(PingMessage::GUID, PingMessage::Create);
+        LoraModule::Utilities::MessageTypeReceived(PingMessage::GUID) += CompassUtils::PassMessageReceivedToDisplay;
 
         System_Utils::registerTask(BootstrapLora::MeshTaskRunner, "mesh-task", 8192, nullptr,
                                    3, BootstrapMicrocontroller::CPU_CORE_LORA);

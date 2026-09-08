@@ -167,6 +167,26 @@ expected by design, hence up to 4 candidates); the real separation is encrypt-th
 The 2-byte MAC is ~1/65536 false-accept — ample against collisions, weak against a
 determined forger, but strictly better than today's zero authentication.
 
+**Trust model (locked).** `Channel Key` segments the fleet into chatrooms; it is not a
+per-device secret and never was. Anyone *without* the key can still relay traffic and
+observe that it exists (cleartext selector byte, packet sizes, timing). Anyone *with*
+the key reads everything. A nearby attacker can forge a group datagram at ~1/65536 cost
+per attempt — acceptable for a closed hobbyist fleet, and MeshCore's contact/ECDH path
+(not this subset) is the upgrade route if that ever changes. Do **not** widen
+`CIPHER_MAC_SIZE`: it forks the wire format and forfeits "we own less protocol."
+Empty `Channel Key` derives a well-known secret: all default devices share one open
+room. This is deliberate out-of-the-box behavior; the mesh logs a boot warning so an
+empty field is never mistaken for encryption.
+
+In the mesh build, `Channel Key` has exactly one consumer:
+`LoraModule::Utilities::UpdateSettings()` → `MeshManager::ApplyChannelKey()` →
+the 32-byte group secret (+ its SHA-256 selector byte), derived on the settings task.
+The legacy 16-byte AES-CBC key, `GenerateIV`, and the CBC
+paths in `SerializeMessage`/`DeserializeMessage` are `#ifndef USE_MESHCORE_LORA` — they
+survive only until V1/V2 flip (Phase 3), then get deleted outright (Phase 4).
+`Num Broadcasts` is not registered at all in the mesh build (MeshCore owns retry +
+airtime); `LoRa Channel` stays registered but inert until Phase 3 wires runtime retune.
+
 ### 5.2 Dedup and the echo counter — **fully resolved**
 
 ```cpp

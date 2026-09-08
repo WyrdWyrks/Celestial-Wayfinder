@@ -64,6 +64,18 @@ namespace LoraModule
         // wire the DIO0 action and enter RX.
         void begin() override
         {
+            // RadioLib's SX1276 PA_BOOST path allows 2..20 dBm; anything above
+            // returns RADIOLIB_ERR_INVALID_OUTPUT_POWER (-13). The legacy
+            // arduino-LoRa fork's "23" never delivered a real +23 dBm.
+            int8_t power = _txPowerDbm;
+            if (power > 20) { power = 20; }
+            if (power < 2)  { power = 2; }
+            if (power != _txPowerDbm)
+            {
+                ESP_LOGW(TAG, "TX power %d dBm out of range - clamped to %d", _txPowerDbm, power);
+                _txPowerDbm = power;
+            }
+
             int16_t st = radio.begin(_freqMHz,
                                      500.0f,   // BW kHz
                                      7,        // SF

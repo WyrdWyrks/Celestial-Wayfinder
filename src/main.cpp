@@ -62,7 +62,7 @@ void setup()
   Serial.setRxBufferSize(8192);
   Serial.begin(115200);
 
-  esp_log_level_set("*", ESP_LOG_ERROR);
+  // esp_log_level_set("*", ESP_LOG_ERROR);
 
   
   // Boostrap hardware modules and utilities
