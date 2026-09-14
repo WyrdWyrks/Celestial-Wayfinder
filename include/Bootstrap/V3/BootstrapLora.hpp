@@ -1,9 +1,23 @@
 #pragma once
 
+// V3 LoRa bring-up: RadioLib SX1276 + the MeshCore routing engine, one
+// wait-discipline task. App PingMessages ride the group channel through the
+// LoraModule::Utilities façade.
+
 #include "Bootstrap/V3/BootstrapMicrocontroller.hpp"
 #include "HelperClasses/PingMessage.hpp"
 #include "HelperClasses/WayfinderLoraState.hpp"
 #include "EventDeclarations.h"
+
+#include <helpers/ArduinoHelpers.h>
+#include <helpers/StaticPoolPacketManager.h>
+
+#include "HelperClasses/LoRaDriver/RadioLibLoRaDriver.hpp"
+#include "HelperClasses/LoRaDriver/MeshBoard.hpp"
+#include "ModuleManagers/LoraManager.hpp"
+#include "HelperClasses/Mesh/MeshTables.hpp"
+#include "HelperClasses/Mesh/MeshTimeClock.hpp"
+#include "FilesystemUtils.h"
 
 namespace
 {
@@ -11,87 +25,14 @@ namespace
     const uint8_t V3_LORA_RST  = 38;
     const uint8_t V3_LORA_DIO0 = 48;
     const uint8_t V3_LORA_TX   = 23;
+
+    // MeshCore's isChannelActive() treats RSSI > noise_floor + threshold as
+    // busy; threshold 0 (its default) is always true on a live RX chain and
+    // stalls every send until Dispatcher's 4 s CAD-busy override. Per-rev
+    // tuning knob — belongs with the pins. (The LORA_* compile stubs RadioLib
+    // headers need are in RadioLibLoRaDriver.hpp.)
+    constexpr int V3_LORA_TX_THRESHOLD = 12;
 }
-
-#ifndef USE_MESHCORE_LORA
-// =============================================================================
-// Legacy stack: Blake-Ballew/arduino-LoRa fork + hand-rolled flood engine.
-// =============================================================================
-
-#include "LoraManager.hpp"
-#include "HelperClasses/LoRaDriver/ArduinoLoRaDriver.h"
-
-class BootstrapLora
-{
-public:
-    static void Initialize()
-    {
-        auto& mgr = Manager();
-        if (!mgr.Init())
-        {
-            ESP_LOGE("BootstrapLora", "Failed to initialize LoRa module");
-            return;
-        }
-
-        Driver().SetSpreadingFactor(7);
-        Driver().SetSignalBandwidth(500E3);
-        Driver().SetTXPower(V3_LORA_TX);
-
-        LoraModule::Utilities::RegisterMessageType(PingMessage::GUID, PingMessage::Create);
-
-        WayfinderLoraState::Init();
-
-        // Register the DIO0 ISR callback — StartReceiving() is deferred to RadioTask()
-        // so the radio does not enter RX mode until the task handle is set.
-        Driver().RegisterOnReceive(LoRaReceiveISR);
-
-        System_Utils::registerTask(BootstrapLora::RadioTaskRunner,    "radio-task",      8192, nullptr, 3, BootstrapMicrocontroller::CPU_CORE_LORA);
-        System_Utils::registerTask(BootstrapLora::SendQueueTaskRunner,"send-queue-task", 8192, nullptr, 2, BootstrapMicrocontroller::CPU_CORE_LORA);
-
-        LoraModule::Utilities::MessageTypeReceived(PingMessage::GUID) += CompassUtils::PassMessageReceivedToDisplay;
-    }
-
-    static ArduinoLoRaDriver& Driver()
-    {
-        static ArduinoLoRaDriver driver(&BootstrapMicrocontroller::SpiBus(), V3_LORA_CS, V3_LORA_RST, V3_LORA_DIO0,
-                                        LoraModule::ChannelToHz(LoraModule::LORA_CHANNEL_DEFAULT));
-        return driver;
-    }
-
-    static LoraModule::Manager& Manager()
-    {
-        static LoraModule::Manager manager(&Driver());
-        return manager;
-    }
-
-    static void RadioTaskRunner(void* pvParameters)
-    {
-        radioReadTaskHandle = xTaskGetCurrentTaskHandle();
-        Manager().RadioTask();
-    }
-
-    static void SendQueueTaskRunner(void* pvParameters)
-    {
-        Manager().SendQueueTask();
-    }
-};
-
-#else
-// =============================================================================
-// MeshCore stack (Phases 1-2). RadioLib SX1276 + MeshCore routing engine, one
-// wait-discipline task. App PingMessages ride the group channel through the
-// unchanged LoraModule::Utilities facade.
-// =============================================================================
-
-#include <helpers/ArduinoHelpers.h>
-#include <helpers/StaticPoolPacketManager.h>
-
-#include "HelperClasses/LoRaDriver/RadioLibLoRaDriver.hpp"
-#include "HelperClasses/LoRaDriver/MeshBoard.hpp"
-#include "ModuleManagers/LoraMeshManager.hpp"
-#include "HelperClasses/Mesh/MeshTables.hpp"
-#include "HelperClasses/Mesh/MeshTimeClock.hpp"
-#include "FilesystemUtils.h"
 
 class BootstrapLora
 {
@@ -104,10 +45,16 @@ public:
         // give every fresh device the same Ed25519 key and DeviceID.
         Rng().begin(static_cast<long>(esp_random()));
 
-        // Begin() reads the persisted Channel Key itself; runtime changes flow
-        // through LoraModule::Utilities::UpdateSettings(), which in this build is
-        // the single consumer of "Channel Key" and routes straight to
-        // MeshManager::ApplyChannelKey(). No subscription needed here.
+        // The library's Manager retunes the radio on a "LoRa Channel" change
+        // through this seam (it cannot include the app's driver header).
+        LoraModule::RegisterRadioRetuner([](mesh::Radio* radio, float freqMHz)
+        {
+            static_cast<LoraModule::RadioLibLoRaDriver*>(radio)->setFrequencyMHz(freqMHz);
+        });
+
+        // Always relay other nodes' traffic — not a user setting (mobile devices;
+        // a wandered leaf node would silently degrade the mesh). Bench builds flip it.
+        Manager().SetRepeat(true);
 
         if (!Manager().Begin())
         {
@@ -139,16 +86,27 @@ public:
         return driver;
     }
 
-    static ArduinoMillis&           MillisClock() { static ArduinoMillis c;                 return c; }
-    static StdRNG&                  Rng()         { static StdRNG r;                          return r; }
-    static LoraModule::MeshTimeClock& RtcClock()  { static LoraModule::MeshTimeClock c;      return c; }
-    static StaticPoolPacketManager& Packets()     { static StaticPoolPacketManager m(16);    return m; }
-    static LoraModule::MeshTables&  Tables()       { static LoraModule::MeshTables t;         return t; }
+    static ArduinoMillis&            MillisClock() { static ArduinoMillis c;              return c; }
+    static StdRNG&                   Rng()         { static StdRNG r;                      return r; }
+    static LoraModule::MeshTimeClock& RtcClock()   { static LoraModule::MeshTimeClock c;  return c; }
+    static StaticPoolPacketManager&  Packets()     { static StaticPoolPacketManager m(16); return m; }
+    static LoraModule::MeshTables&   Tables()      { static LoraModule::MeshTables t;      return t; }
 
-    static LoraModule::MeshManager& Manager()
+    // Declared before Manager() (the Meyers singleton instantiates it). Overrides
+    // the interference threshold per rev — see V3_LORA_TX_THRESHOLD above.
+    class BootstrapManager : public LoraModule::Manager
     {
-        static LoraModule::MeshManager manager(Driver(), MillisClock(), Rng(),
-                                               RtcClock(), Packets(), Tables());
+    public:
+        using LoraModule::Manager::Manager;
+
+    protected:
+        int getInterferenceThreshold() const override { return V3_LORA_TX_THRESHOLD; }
+    };
+
+    static LoraModule::Manager& Manager()
+    {
+        static BootstrapManager manager(Driver(), MillisClock(), Rng(),
+                                        RtcClock(), Packets(), Tables());
         return manager;
     }
 
@@ -157,5 +115,3 @@ public:
         Manager().Loop();
     }
 };
-
-#endif // USE_MESHCORE_LORA

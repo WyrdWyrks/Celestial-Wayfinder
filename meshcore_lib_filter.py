@@ -17,20 +17,31 @@ manipulation. So this script rewrites the fetched MeshCore manifest in place:
 
   * drop `build.extraScript` (build_as_lib.py) -- we don't use its variant /
     display / platform knobs (no MC_VARIANT / DISPLAY_CLASS defined)
-  * set `build.srcFilter` to the engine subset
-  * put `<libdeps>/MeshCore/lib/ed25519` on the project CPPPATH so
-    `Identity.cpp`'s `#include <ed_25519.h>` (a MeshCore-vendored nested lib
-    that PlatformIO's LDF doesn't discover for a consumed dependency) resolves.
-    The ed25519 .c sources are compiled via `lib_extra_dirs` in platformio.ini.
+  * set `build.srcFilter` to the engine subset -- including `+<../lib/ed25519/*.c>`
+    so MeshCore's vendored ed25519 compiles into libMeshCore.a. (LDF won't link
+    it on its own: `Identity.cpp` includes it as `<ed_25519.h>`, and angle-bracket
+    includes are not resolved to a library.)
+  * put `<libdeps>/MeshCore/lib/ed25519` on the project CPPPATH so that
+    `#include <ed_25519.h>` resolves.
 
 The edit is idempotent and re-applies after `pio pkg install` refetches the dep,
 so it is not a MeshCore fork -- it's app-repo build configuration.
+
+It also injects -DLORA_SF into MeshCore's own compilation (via library.json
+build.flags). RadioLibWrappers.h:55 has an unreplaced fallback
+`getSpreadingFactor() { return LORA_SF; }`, so MeshCore's TU needs the macro to
+exist even though every real subclass overrides it with the live radio read.
+The project-side stubs for our own TUs live in RadioLibLoRaDriver.hpp; keeping
+this one here means no dead modem constants in platformio.ini. Value unused; 7
+matches the real SF purely so a future grep finds something sensible.
 """
 
 import json
 import os
 
 Import("env")  # noqa: F821
+
+_LORA_SF_FALLBACK = ["-DLORA_SF=7"]
 
 _ENGINE_SRC_FILTER = [
     "-<*>",
@@ -42,6 +53,7 @@ _ENGINE_SRC_FILTER = [
     "+<helpers/IdentityStore.cpp>",
     "+<helpers/StaticPoolPacketManager.cpp>",
     "+<helpers/radiolib/RadioLibWrappers.cpp>",
+    "+<../lib/ed25519/*.c>",   # vendored Ed25519; LDF won't pull it (angle-bracket include)
 ]
 
 _mc_dir = os.path.join(
@@ -75,7 +87,8 @@ else:
 
     if build.pop("extraScript", None) is not None:
         changed = True
-    if build.pop("flags", None) is not None:
+    if build.get("flags") != _LORA_SF_FALLBACK:
+        build["flags"] = _LORA_SF_FALLBACK   # see module docstring
         changed = True
     if build.get("srcFilter") != _ENGINE_SRC_FILTER:
         build["srcFilter"] = _ENGINE_SRC_FILTER

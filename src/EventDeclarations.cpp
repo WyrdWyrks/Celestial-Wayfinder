@@ -1,12 +1,10 @@
 #include "EventDeclarations.h"
-#include "HelperClasses/LoRaDriver/ArduinoLoRaDriver.h"
 #include "LED_Manager.h"
 #include "Display_Manager.h"
 #include "esp_log.h"
 #include "DisplayUtilities.hpp"
 
 TaskHandle_t inputTaskHandle;
-TaskHandle_t radioReadTaskHandle;
 QueueHandle_t displayCommandQueue;
 
 ESP32Encoder *inputEncoder;
@@ -137,41 +135,7 @@ void IRAM_ATTR encButtonISR()
 //     }
 // }
 
-#if HARDWARE_VERSION == 1
-
-void IRAM_ATTR enc_cb(void *arg)
-{
-    static int64_t prevCount = 0;
-    static TickType_t lastISRTime = 0;
-
-    ESP32Encoder *enc = ESP32Encoder::encoders[0];
-    int64_t currCount = enc->getCount();
-
-    if (currCount % 2 != 0) { return; }
-
-    if (xTaskGetTickCount() - lastISRTime < DEBOUNCE_TIME_ENC) { return; }
-    lastISRTime = xTaskGetTickCount();
-
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    DisplayModule::DisplayCommandQueueItem command;
-    command.commandType = DisplayModule::CommandType::INPUT_COMMAND;
-
-    if (currCount > prevCount)
-    {
-        command.commandData.inputCommand.inputID = DisplayModule::InputID::ENC_DOWN;
-    }
-    else if (currCount < prevCount)
-    {
-        command.commandData.inputCommand.inputID = DisplayModule::InputID::ENC_UP;
-    }
-    else { return; }
-
-    prevCount = currCount;
-    xQueueSendFromISR(displayCommandQueue, &command, &xHigherPriorityTaskWoken);
-    if (xHigherPriorityTaskWoken) { portYIELD_FROM_ISR(); }
-}
-
-#elif HARDWARE_VERSION == 2
+#if HARDWARE_VERSION == 2
 
 void IRAM_ATTR enc_cb(void *arg)
 {
@@ -254,19 +218,6 @@ void IRAM_ATTR CompassDRDYISR()
     // ESP_EARLY_LOGD(TAG, "CompassDRDYISR");
 #endif
     // Navigation_Manager::read();
-}
-
-// Runs in interrupt context and does nothing but wake the radio task. No SPI,
-// no logging — the radio task reads the packet length and the FIFO itself, so
-// nothing here can race a read already in progress.
-void IRAM_ATTR LoRaReceiveISR()
-{
-    if (radioReadTaskHandle != nullptr)
-    {
-        BaseType_t higherPriorityTaskWoken = pdFALSE;
-        vTaskNotifyGiveFromISR(radioReadTaskHandle, &higherPriorityTaskWoken);
-        portYIELD_FROM_ISR(higherPriorityTaskWoken);
-    }
 }
 
 // void enableInterrupts()

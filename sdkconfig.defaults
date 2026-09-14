@@ -2,6 +2,15 @@
 CONFIG_AUTOSTART_ARDUINO=y
 CONFIG_FREERTOS_HZ=1000
 
+# Release/size build. IDF's raw Kconfig defaults are -Og + full newlib printf +
+# assertions; a freshly generated per-env sdkconfig picks those up and bloats
+# the image ~400 KB vs. the size-optimized one hardware-v3 has carried for a
+# while. Pin them here so every env (new or regenerated) matches.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
+CONFIG_COMPILER_OPTIMIZATION_ASSERTION_LEVEL=1
+CONFIG_NEWLIB_NANO_FORMAT=y
+
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
 

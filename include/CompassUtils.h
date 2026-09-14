@@ -2,7 +2,7 @@
 
 #include <FastLED.h>
 
-#include "LoraManager.hpp"
+#include "LoraUtilities.hpp"
 #include "FilesystemUtils.h"
 #include "RpcUtils.h"
 #include "LED_Utils.h"

@@ -7,7 +7,6 @@
 // #include "esp_event_base.h"
 
 extern TaskHandle_t inputTaskHandle;
-extern TaskHandle_t radioReadTaskHandle;
 extern QueueHandle_t displayCommandQueue;
 
 extern ESP32Encoder *inputEncoder;
@@ -39,7 +38,6 @@ void IRAM_ATTR encButtonISR();
 // void IRAM_ATTR buttonSOSISR();
 void IRAM_ATTR enc_cb(void *arg);
 void IRAM_ATTR CompassDRDYISR();
-void IRAM_ATTR LoRaReceiveISR();
 
 void enableInterrupts();
 void disableInterrupts();

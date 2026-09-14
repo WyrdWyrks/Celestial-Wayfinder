@@ -2,6 +2,29 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+
+// MeshCore's radio headers reference LORA_* compile-time fallbacks that this
+// project deliberately never uses — std_init() (LORA_FREQ/BW/SF/TX_POWER, via
+// the CR define) and RadioLibWrappers' getSpreadingFactor() (LORA_SF) are both
+// overridden or bypassed by runtime values set in begin() below. They still
+// have to *parse*, so stub them here, ahead of the includes, rather than as
+// dead constants in platformio.ini. Never reaches hardware.
+#ifndef LORA_CR
+#define LORA_CR 8            // only feeds std_init()'s local; we pass CR 4:8 at runtime
+#endif
+#ifndef LORA_FREQ
+#define LORA_FREQ 915.0f     // std_init() only; real frequency comes from ChannelToHz()
+#endif
+#ifndef LORA_BW
+#define LORA_BW 500          // std_init() only; begin() sets 500 kHz explicitly
+#endif
+#ifndef LORA_SF
+#define LORA_SF 7            // std_init() + RadioLibWrappers.h:55 fallback (overridden)
+#endif
+#ifndef LORA_TX_POWER
+#define LORA_TX_POWER 20     // std_init() only; begin() applies the per-rev clamped value
+#endif
+
 #include <RadioLib.h>
 #include <esp_log.h>
 
@@ -43,17 +66,21 @@ namespace LoraModule
     public:
         static constexpr const char* TAG = "RadioLibLoRa";
 
-        // freqMHz: e.g. 915.0. txPowerDbm: SX1276 PA_BOOST range ~2..20 (V1) or
-        // up to 23 with the fork's over-range handling; RadioLib clamps.
+        // freqMHz: e.g. 915.0. txPowerDbm: SX1276 PA_BOOST range 2..20; begin()
+        // clamps. spiHz: RadioLib defaults to 2 MHz; the legacy arduino-LoRa
+        // driver ran the older revs at 1 MHz and 2 MHz fails RegVersion reads
+        // (-2 CHIP_NOT_FOUND) on some of them, so it's a per-rev knob.
         RadioLibLoRaDriver(SPIClass& spi,
                            int csPin, int rstPin, int dio0Pin, int dio1Pin,
                            mesh::MainBoard& board,
-                           float freqMHz, int8_t txPowerDbm)
+                           float freqMHz, int8_t txPowerDbm,
+                           uint32_t spiHz = 2000000)
             : detail::SX1276Holder(new Module(static_cast<uint32_t>(csPin),
                                               static_cast<uint32_t>(dio0Pin),
                                               static_cast<uint32_t>(rstPin),
                                               static_cast<uint32_t>(dio1Pin),
-                                              spi)),
+                                              spi,
+                                              SPISettings(spiHz, MSBFIRST, SPI_MODE0))),
               CustomSX1276Wrapper(radio, board),
               _freqMHz(freqMHz),
               _txPowerDbm(txPowerDbm)
@@ -89,8 +116,11 @@ namespace LoraModule
             }
             else
             {
-                ESP_LOGI(TAG, "SX1276 up @ %.3f MHz  SF7 BW500 CR4:8  %d dBm",
-                         _freqMHz, _txPowerDbm);
+                // Integer kHz, not "%.3f MHz": a single %f in any ESP_LOG format
+                // string drags newlib's float-capable vfprintf + dtoa into the
+                // image (~30-40 KB). Nothing else in this firmware needs it.
+                ESP_LOGI(TAG, "SX1276 up @ %u kHz  SF7 BW500 CR4:8  %d dBm",
+                         static_cast<unsigned>(_freqMHz * 1000.0f + 0.5f), _txPowerDbm);
             }
 
             radio.setCRC(1);
@@ -105,7 +135,8 @@ namespace LoraModule
             int16_t st = radio.setFrequency(freqMHz);
             if (st != RADIOLIB_ERR_NONE)
             {
-                ESP_LOGE(TAG, "setFrequency(%.3f) failed: %d", freqMHz, st);
+                ESP_LOGE(TAG, "setFrequency(%u kHz) failed: %d",
+                         static_cast<unsigned>(freqMHz * 1000.0f + 0.5f), st);
             }
         }
 
