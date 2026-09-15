@@ -66,6 +66,25 @@ public:
     // is distinguishable from ordinary input feedback.
     static constexpr uint8_t HAPTIC_NOTIFICATION_INTENSITY = 200;
 
+    // Not a timer. The display queue is one slot deep, and this only bounds
+    // how long the mesh task blocks when that slot is already holding an
+    // undelivered button press. If the slot is free the send returns at once
+    // and the display task wakes for a single refresh. Waiting briefly beats
+    // dropping the refresh; the home screen would otherwise not show the new
+    // unread count until its 60 s tick or the next input.
+    static constexpr size_t MESSAGE_RECEIVED_QUEUE_FULL_TIMEOUT_MS = 100;
+
+    // Runs on the MESH task (LoraModule::Manager::onGroupDataRecv fires
+    // MessageTypeReceived from there), so it must not touch the window stack,
+    // the windows' draw-command lists or the OLED framebuffer — those are all
+    // owned by the display task and rebuilt by it on every render. It used to
+    // call onMessageReceived() + render() directly from here, which raced the
+    // display task's own render loop (vector cleared under iteration, two
+    // tasks pushing the framebuffer over I2C) and could crash while the device
+    // was otherwise idle. Now it asks the display task for one out-of-band
+    // refresh: whatever window is up gets ticked and redrawn on the display
+    // task (HomeState's tick rebuilds the unread indicator). The buzzer/haptic
+    // are task-agnostic and stay here.
     static void PassMessageReceivedToDisplay(std::shared_ptr<LoraModule::LoraMessageInterface> msg, bool isNew)
     {
         if (isNew)
@@ -73,13 +92,10 @@ public:
             #if DEBUG == 1
             ESP_LOGI(TAG_COMPASS, "PassMessageReceivedToDisplay: New message received");
             #endif
-            
-            // Check if we're on home window
-            if (_homeWindowInstance == DisplayModule::Utilities::activeWindow())
+
+            if (!DisplayModule::Utilities::sendRefreshCommand(MESSAGE_RECEIVED_QUEUE_FULL_TIMEOUT_MS))
             {
-                ESP_LOGI(TAG, "Refreshing home window");
-                _homeWindowInstance->onMessageReceived();
-                DisplayModule::Utilities::render();
+                ESP_LOGW(TAG_COMPASS, "Display queue busy; screen refresh deferred to its next tick");
             }
 
             if (System_Utils::silentMode == false)
