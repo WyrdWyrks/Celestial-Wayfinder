@@ -4,7 +4,7 @@
 
 #include "LedPatternInterface.hpp"
 #include "LedSegment.hpp"
-#include "LED_Manager.h"
+#include "LedManager.hpp"
 #include "DisplayUtilities.hpp"
 #include "LoraUtils.h"
 
@@ -74,8 +74,8 @@ TODO: Remap LEDs after bodging
 41-48:  Knob ring (Counter-clockwise)
 49-52:  Right Trace
 
-The flashlight is the one pattern that spans all NUM_LEDS rather than a named
-segment above.
+The flashlight covers the union of the named segments above (0-52). Indices
+past 52 belong to no segment and stay dark.
 */
 
 class BootstrapLeds
@@ -88,54 +88,50 @@ public:
         pinMode(LED_EN_PIN, OUTPUT);
         digitalWrite(LED_EN_PIN, HIGH);
 
-        LED_Utils::registerPattern(&ButtonFlashPattern());
-        LED_Utils::registerPattern(&IlluminateButtonPattern());
-        LED_Utils::registerPattern(&RingPointPattern());
-        LED_Utils::registerPattern(&RingPulsePattern());
-        LED_Utils::registerPattern(&ScrollWheelPattern());
-        LED_Utils::registerPattern(&LeftTraceFlowPattern());
-        LED_Utils::registerPattern(&RightTraceFlowPattern());
-        LED_Utils::registerPattern(&FlashlightPattern());
+        // Priority decides who owns an LED when segments overlap: the lock
+        // screen guide beats everything, the flashlight beats everything else,
+        // and press/trace feedback sits above the per-screen indicators.
+        using UxModule::LedPriority;
+        UxModule::LedUtilities::registerPattern(&ButtonFlashPattern(),      LedPriority::FEEDBACK);
+        UxModule::LedUtilities::registerPattern(&IlluminateButtonPattern(), LedPriority::MODAL);
+        UxModule::LedUtilities::registerPattern(&RingPointPattern(),        LedPriority::BACKGROUND);
+        UxModule::LedUtilities::registerPattern(&RingPulsePattern(),        LedPriority::BACKGROUND);
+        UxModule::LedUtilities::registerPattern(&ScrollWheelPattern(),      LedPriority::BACKGROUND);
+        UxModule::LedUtilities::registerPattern(&LeftTraceFlowPattern(),    LedPriority::FEEDBACK);
+        UxModule::LedUtilities::registerPattern(&RightTraceFlowPattern(),   LedPriority::FEEDBACK);
+        UxModule::LedUtilities::registerPattern(&FlashlightPattern(),       LedPriority::OVERLAY);
 
-        LED_Manager::init(NUM_LEDS, LEDBuffer(), LED_TASK_CPU_CORE);
+        UxModule::LedManager::init(NUM_LEDS, LEDBuffer(), LED_TASK_CPU_CORE);
 
         // Initialize button flashing animation
 
-        auto buttonFlashPatternID = ButtonFlash::RegisteredPatternID();
-        LED_Utils::enablePattern(buttonFlashPatternID);
-        LED_Utils::setAnimationLengthMS(buttonFlashPatternID, 300);
+        auto buttonFlashPatternID = UxModule::ButtonFlash::RegisteredPatternID();
+        UxModule::LedUtilities::enablePattern(buttonFlashPatternID);
+        UxModule::LedUtilities::setAnimationLengthMS(buttonFlashPatternID, 300);
 
-        // The flashlight stays enabled (but off) for the whole session — both
-        // LED_Utils::configurePattern and the single-iteration notification drop
-        // work for disabled patterns, so the Actions-menu toggle needs it live.
-        LED_Utils::enablePattern(Flashlight::RegisteredPatternID());
+        // The flashlight stays enabled for the whole session and is switched by
+        // its own on/off state: it only claims the strip (isActive) while on,
+        // so the Actions-menu toggle just configures it and requests a frame.
+        UxModule::LedUtilities::enablePattern(UxModule::Flashlight::RegisteredPatternID());
 
         // Trace flows — armed here, fired by the LoRa events wired below.
         for (int id : { LeftTraceFlowPattern().patternID(), RightTraceFlowPattern().patternID() })
         {
-            LED_Utils::enablePattern(id);
-            LED_Utils::setAnimationLengthMS(id, TRACE_FLOW_MS);
+            UxModule::LedUtilities::enablePattern(id);
+            UxModule::LedUtilities::setAnimationLengthMS(id, TRACE_FLOW_MS);
         }
 
         _WireTraceFlows();
 
+        // The flash always animates; under the flashlight or the lock screen
+        // guide it is simply hidden by their higher priority.
         DisplayModule::Utilities::getInputRaised() += [](const DisplayModule::InputContext &ctx) {
-            // A button flash fades its own LED down to black, which would leave a
-            // dark hole in a beam that owns the whole strip. Repaint the flashlight
-            // instead of animating — this also covers the presses used to walk out
-            // of the Actions menu right after switching it on.
-            if (FlashlightPattern().isOn())
-            {
-                LED_Utils::iteratePattern(Flashlight::RegisteredPatternID());
-                return;
-            }
-
             ESP_LOGI(TAG, "Button flash input: %d", ctx.inputID);
             JsonDocument cfg;
             cfg["inputID"] = ctx.inputID;
-            auto buttonFlashPatternID = ButtonFlash::RegisteredPatternID();
-            LED_Utils::configurePattern(buttonFlashPatternID, cfg);
-            LED_Utils::loopPattern(buttonFlashPatternID, 1);
+            auto buttonFlashPatternID = UxModule::ButtonFlash::RegisteredPatternID();
+            UxModule::LedUtilities::configurePattern(buttonFlashPatternID, cfg);
+            UxModule::LedUtilities::loopPattern(buttonFlashPatternID, 1);
         };
 
         System_Utils::getEnablePowerSavings() += []() {
@@ -145,19 +141,17 @@ public:
         System_Utils::getDisablePowerSavings() += []() {
             digitalWrite(LED_EN_PIN, HIGH);
 
-            // Cutting LED_EN drops the strip's state, so a flashlight left on
-            // across a lock has to be redrawn on wake.
-            if (FlashlightPattern().isOn())
-            {
-                LED_Utils::iteratePattern(Flashlight::RegisteredPatternID());
-            }
+            // Cutting LED_EN drops the strip's state, so whatever was lit
+            // (a flashlight left on across a lock, a screen indicator) has to
+            // be pushed again on wake.
+            UxModule::LedUtilities::refresh();
         };
 
         // Play the shutdown fade before any other shutdown subscriber (e.g. the
         // MCU bootstrap entering ship mode). PushFront keeps it first regardless
         // of which bootstrap initializes first.
         System_Utils::getSystemShutdown().PushFront([]() {
-            LedPatternInterface::PlayBlocking(ShutdownPattern());
+            UxModule::LedUtilities::playBlocking(ShutdownPattern());
         });
     }
 
@@ -180,9 +174,9 @@ public:
         return compassRingIndicies;
     }
 
-    static LedSegment &CompassRingSegment()
+    static UxModule::LedSegment &CompassRingSegment()
     {
-        static LedSegment compassRing(LEDBuffer(), CompassRingIndicies());
+        static UxModule::LedSegment compassRing(LEDBuffer(), CompassRingIndicies());
         return compassRing;
     }
 
@@ -197,16 +191,16 @@ public:
         return encoderRingIndicies;
     }
 
-    static LedSegment &EncoderRingSegment()
+    static UxModule::LedSegment &EncoderRingSegment()
     {
-        static LedSegment encoderRing(LEDBuffer(), EncoderRingIndicies());
+        static UxModule::LedSegment encoderRing(LEDBuffer(), EncoderRingIndicies());
         return encoderRing;
     }
 
-    static LedSegment &InputLedSegment()
+    static UxModule::LedSegment &InputLedSegment()
     {
         // Initialize input LEDs in order of InputID
-        static LedSegment inputLeds(
+        static UxModule::LedSegment inputLeds(
             LEDBuffer(),
             {
                 LED_IDX_BUTTON_1, 
@@ -219,24 +213,31 @@ public:
     }
 
     // v3 has no dedicated flashlight LEDs the way v1 and v2 did, so the
-    // flashlight drives the entire strip — buttons, traces, compass and knob
-    // ring all go white together to get as much light out of the device as
-    // possible.
-    static LedSegment &FlashlightSegment()
+    // flashlight is the union of every logical segment — buttons, traces,
+    // compass and knob ring all go white together to get as much light out of
+    // the device as possible. Registered at OVERLAY priority, it covers every
+    // other pattern except the MODAL lock screen guide on the buttons.
+    static UxModule::LedSegment &FlashlightSegment()
     {
-        static LedSegment flashlight(LEDBuffer(), 0, NUM_LEDS);
+        static UxModule::LedSegment flashlight = UxModule::LedSegment::Composite({
+            InputLedSegment(),
+            LeftTraceSegment(),
+            CompassRingSegment(),
+            EncoderRingSegment(),
+            RightTraceSegment(),
+        });
         return flashlight;
     }
 
-    static LedSegment LeftTraceSegment()
+    static UxModule::LedSegment LeftTraceSegment()
     {
-        static LedSegment leftTrace(LEDBuffer(), LED_IDX_LEFT_TRACE, NUM_TRACE_LEDS);
+        static UxModule::LedSegment leftTrace(LEDBuffer(), LED_IDX_LEFT_TRACE, NUM_TRACE_LEDS);
         return leftTrace;
     }
 
-    static LedSegment RightTraceSegment()
+    static UxModule::LedSegment RightTraceSegment()
     {
-        static LedSegment rightTrace(LEDBuffer(), LED_IDX_RIGHT_TRACE, NUM_TRACE_LEDS);
+        static UxModule::LedSegment rightTrace(LEDBuffer(), LED_IDX_RIGHT_TRACE, NUM_TRACE_LEDS);
         return rightTrace;
     }
 
@@ -245,26 +246,24 @@ public:
     // each — so both carry the reversed flag. It stays per-strip rather than
     // being folded into the pattern so a board revision that flips one side
     // only has to change the flag here. Verified on hardware.
-    static TraceFlow &LeftTraceFlowPattern()
+    static UxModule::TraceFlow &LeftTraceFlowPattern()
     {
-        static TraceFlow leftFlow(LeftTraceSegment(), /*reversed=*/true);
+        static UxModule::TraceFlow leftFlow(LeftTraceSegment(), /*reversed=*/true);
         return leftFlow;
     }
 
-    static TraceFlow &RightTraceFlowPattern()
+    static UxModule::TraceFlow &RightTraceFlowPattern()
     {
-        static TraceFlow rightFlow(RightTraceSegment(), /*reversed=*/true);
+        static UxModule::TraceFlow rightFlow(RightTraceSegment(), /*reversed=*/true);
         return rightFlow;
     }
 
     // Fires both traces together. outward = a message leaving this device,
     // inward = one arriving. A fully black color falls back to the theme color.
+    // Runs on the mesh task; safe because UxModule::LedUtilities locks. Under the
+    // flashlight the flow still runs, hidden by its higher priority.
     static void PlayTraceFlow(CRGB color, bool outward)
     {
-        // Same reason as the button flash: a trace clears its LEDs when the flow
-        // finishes, which would leave two dark gaps in the beam.
-        if (FlashlightPattern().isOn()) { return; }
-
         JsonDocument cfg;
         cfg["rOverride"] = color.r;
         cfg["gOverride"] = color.g;
@@ -273,14 +272,14 @@ public:
 
         for (int id : { LeftTraceFlowPattern().patternID(), RightTraceFlowPattern().patternID() })
         {
-            LED_Utils::configurePattern(id, cfg);
-            LED_Utils::loopPattern(id, 1);
+            UxModule::LedUtilities::configurePattern(id, cfg);
+            UxModule::LedUtilities::loopPattern(id, 1);
         }
     }
 
-    static ButtonFlash &ButtonFlashPattern()
+    static UxModule::ButtonFlash &ButtonFlashPattern()
     {
-        static ButtonFlash buttonFlash(
+        static UxModule::ButtonFlash buttonFlash(
             InputLedSegment(), 
             {
                 DisplayModule::InputID::BUTTON_1,
@@ -291,9 +290,9 @@ public:
         return buttonFlash;
     }
 
-    static IlluminateButton &IlluminateButtonPattern()
+    static UxModule::IlluminateButton &IlluminateButtonPattern()
     {
-        static IlluminateButton illuminateButton(
+        static UxModule::IlluminateButton illuminateButton(
             InputLedSegment(), 
             {
                 DisplayModule::InputID::BUTTON_1,
@@ -304,45 +303,45 @@ public:
         return illuminateButton;
     }
 
-    static RingPoint &RingPointPattern()
+    static UxModule::RingPoint &RingPointPattern()
     {
-        static RingPoint ringPoint(CompassRingSegment());
+        static UxModule::RingPoint ringPoint(CompassRingSegment());
         return ringPoint;
     }
 
-    static RingPoint &EncoderPointPattern()
+    static UxModule::RingPoint &EncoderPointPattern()
     {
-        static RingPoint encoderPoint(CompassRingSegment());
+        static UxModule::RingPoint encoderPoint(CompassRingSegment());
         return encoderPoint;
     }
 
-    static RingPulse &RingPulsePattern()
+    static UxModule::RingPulse &RingPulsePattern()
     {
-        static RingPulse ringPulse(CompassRingSegment());
+        static UxModule::RingPulse ringPulse(CompassRingSegment());
         return ringPulse;
     }
 
-    static RingPulse &EncoderPulsePattern()
+    static UxModule::RingPulse &EncoderPulsePattern()
     {
-        static RingPulse encoderPulse(EncoderRingSegment());
+        static UxModule::RingPulse encoderPulse(EncoderRingSegment());
         return encoderPulse;
     }
 
-    static ScrollWheel &ScrollWheelPattern()
+    static UxModule::ScrollWheel &ScrollWheelPattern()
     {
-        static ScrollWheel scrollWheel(EncoderRingSegment());
+        static UxModule::ScrollWheel scrollWheel(EncoderRingSegment());
         return scrollWheel;
     }
 
-    static Flashlight &FlashlightPattern()
+    static UxModule::Flashlight &FlashlightPattern()
     {
-        static Flashlight flashlight(FlashlightSegment());
+        static UxModule::Flashlight flashlight(FlashlightSegment());
         return flashlight;
     }
 
-    static RingShutdown &ShutdownPattern()
+    static UxModule::RingShutdown &ShutdownPattern()
     {
-        static RingShutdown shutdown(CompassRingSegment());
+        static UxModule::RingShutdown shutdown(CompassRingSegment());
         return shutdown;
     }
 
@@ -372,7 +371,7 @@ private:
         // SendMessage, so one user-initiated send is one flow.
         LoraModule::Utilities::MyLastBroadcastChanged() += []()
         {
-            PlayTraceFlow(LED_Utils::ThemeColor(), /*outward=*/true);
+            PlayTraceFlow(UxModule::LedUtilities::ThemeColor(), /*outward=*/true);
         };
     }
 };

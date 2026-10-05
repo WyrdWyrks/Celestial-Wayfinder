@@ -2,56 +2,62 @@
 
 #include "LedPatternInterface.hpp"
 
-
-// Turns a segment of LEDs on (white) or off
-class Flashlight : public LedPatternInterface
+namespace UxModule
 {
-public:
-    Flashlight(LedSegment segment)
-        : LedPatternInterface(std::move(segment)), _on(false)
+    // Turns a segment of LEDs on (white) or off
+    class Flashlight : public LedPatternInterface
     {
-        setAnimationLengthTicks(1);
-    }
-
-    void configurePattern(JsonDocument &config)
-    {
-        if (config["on"].is<bool>())
+    public:
+        Flashlight(LedSegment segment)
+            : LedPatternInterface(std::move(segment)), _on(false)
         {
-            _on = config["on"].as<bool>();
+            setAnimationLengthTicks(1);
         }
 
-        if (config["toggle"].is<bool>())
+        void configurePattern(JsonDocument &config)
+        {
+            if (config["on"].is<bool>())
+            {
+                _on = config["on"].as<bool>();
+            }
+
+            if (config["toggle"].is<bool>())
+            {
+                _on = !_on;
+            }
+        }
+
+        bool iterateFrame()
+        {
+            CRGB color = _on ? CRGB::White : CRGB::Black;
+            for (size_t i = 0; i < _segment.length(); i++)
+            {
+                _segment[i] = color;
+            }
+            return true;
+        }
+
+        void toggle()
         {
             _on = !_on;
         }
-    }
 
-    bool iterateFrame()
-    {
-        CRGB color = _on ? CRGB::White : CRGB::Black;
-        for (size_t i = 0; i < _segment.length(); i++)
+        bool isOn() const { return _on; }
+
+        // Claims its LEDs only while on, so switching it off reveals whatever
+        // lower-priority pattern is underneath instead of a black strip.
+        bool isActive() const override { return _on; }
+
+        void SetRegisteredPatternID(int patternID) { _RegisteredPatternId() = patternID; }
+        static int RegisteredPatternID() { return _RegisteredPatternId(); }
+
+    protected:
+        static int &_RegisteredPatternId()
         {
-            _segment[i] = color;
+            static int id = -1;
+            return id;
         }
-        return true;
-    }
 
-    void toggle()
-    {
-        _on = !_on;
-    }
-
-    bool isOn() const { return _on; }
-
-    void SetRegisteredPatternID(int patternID) { _RegisteredPatternId() = patternID; }
-    static int RegisteredPatternID() { return _RegisteredPatternId(); }
-
-protected:
-    static int &_RegisteredPatternId()
-    {
-        static int id = -1;
-        return id;
-    }
-
-    bool _on;
-};
+        bool _on;
+    };
+}

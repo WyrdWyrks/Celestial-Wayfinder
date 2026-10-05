@@ -8,7 +8,7 @@
 #include "LoraUtils.h"
 #include "HelperClasses/PingMessage.hpp"
 #include "NavigationUtils.h"
-#include "LED_Utils.h"
+#include "LedUtilities.hpp"
 #include "RingPulse.hpp"
 
 namespace DisplayModule
@@ -22,7 +22,7 @@ namespace DisplayModule
         void onEnter(const StateTransferData &data) override
         {
             _message = nullptr;
-            _ringPulseID = RingPulse::RegisteredPatternID();
+            _ringPulseID = UxModule::RingPulse::RegisteredPatternID();
 
             if (data.payload)
             {
@@ -45,10 +45,10 @@ namespace DisplayModule
                 cfg["rOverride"] = _message->color_R;
                 cfg["gOverride"] = _message->color_G;
                 cfg["bOverride"] = _message->color_B;
-                LED_Utils::setAnimationLengthMS(_ringPulseID, LED_ANIMATION_MS);
-                LED_Utils::configurePattern(_ringPulseID, cfg);
-                LED_Utils::enablePattern(_ringPulseID);
-                LED_Utils::loopPattern(_ringPulseID, -1);
+                UxModule::LedUtilities::setAnimationLengthMS(_ringPulseID, LED_ANIMATION_MS);
+                UxModule::LedUtilities::configurePattern(_ringPulseID, cfg);
+                UxModule::LedUtilities::enablePattern(_ringPulseID);
+                UxModule::LedUtilities::loopPattern(_ringPulseID, -1);
                 refreshIntervalMs = MESSAGE_REPEAT_INTERVAL_MS;
             }
             else
@@ -66,11 +66,11 @@ namespace DisplayModule
             WindowState::onExit();
         }
 
-        void onPause() override { LED_Utils::clearPattern(_ringPulseID); }
+        void onPause() override { UxModule::LedUtilities::clearPattern(_ringPulseID); }
 
         void onResume() override
         {
-            if (_message) { LED_Utils::loopPattern(_ringPulseID, -1); }
+            if (_message) { UxModule::LedUtilities::loopPattern(_ringPulseID, -1); }
         }
 
         void onTick() override
@@ -95,9 +95,9 @@ namespace DisplayModule
         {
             if (_ringPulseID >= 0)
             {
-                LED_Utils::disablePattern(_ringPulseID);
-                LED_Utils::loopPattern(_ringPulseID, 0);
-                LED_Utils::resetPattern(_ringPulseID);
+                UxModule::LedUtilities::disablePattern(_ringPulseID);
+                UxModule::LedUtilities::loopPattern(_ringPulseID, 0);
+                UxModule::LedUtilities::resetPattern(_ringPulseID);
             }
         }
 

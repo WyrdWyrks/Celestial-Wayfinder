@@ -264,9 +264,9 @@ namespace DisplayModule
                 ping->time        = gpsTime;
                 ping->date        = gpsDate;
                 ping->senderName  = LoraUtils::UserName();
-                ping->color_R     = LED_Utils::ThemeColor().r;
-                ping->color_G     = LED_Utils::ThemeColor().g;
-                ping->color_B     = LED_Utils::ThemeColor().b;
+                ping->color_R     = UxModule::LedUtilities::ThemeColor().r;
+                ping->color_G     = UxModule::LedUtilities::ThemeColor().g;
+                ping->color_B     = UxModule::LedUtilities::ThemeColor().b;
                 ping->lat         = _pendingLat;
                 ping->lng         = _pendingLng;
                 ping->status      = payload["Message"].as<std::string>();
@@ -574,11 +574,11 @@ namespace DisplayModule
             // strip on v1/v2, the whole strip on v3 — so the toggle is unguarded.
             menuItems.push_back(DisplayModule::MenuItem("Flashlight", []()
             {
-                auto flashlightId = Flashlight::RegisteredPatternID();
+                auto flashlightId = UxModule::Flashlight::RegisteredPatternID();
                 JsonDocument doc;
                 doc["toggle"] = true;
-                LED_Utils::configurePattern(flashlightId, doc);
-                LED_Utils::iteratePattern(flashlightId);
+                UxModule::LedUtilities::configurePattern(flashlightId, doc);
+                UxModule::LedUtilities::iteratePattern(flashlightId);
             }));
 
             menuItems.push_back(DisplayModule::MenuItem("Create Status Message", [this]()

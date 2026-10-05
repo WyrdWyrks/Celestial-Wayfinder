@@ -6,7 +6,7 @@
 #include "TextDrawCommand.hpp"
 #include "NavigationUtils.h"
 #include "RingPoint.hpp"
-#include "LED_Utils.h"
+#include "LedUtilities.hpp"
 
 namespace DisplayModule
 {
@@ -43,7 +43,7 @@ namespace DisplayModule
         {
             bindInput(InputID::BUTTON_3, "Back");
             refreshIntervalMs = REFRESH_RATE_MS;
-            _ringPointPatternId = RingPoint::RegisteredPatternID();
+            _ringPointPatternId = UxModule::RingPoint::RegisteredPatternID();
         }
 
         // ------------------------------------------------------------------
@@ -53,13 +53,13 @@ namespace DisplayModule
         void onEnter(const StateTransferData &) override
         {
             _rebuildDrawCommands();
-            LED_Utils::enablePattern(_ringPointPatternId);
+            UxModule::LedUtilities::enablePattern(_ringPointPatternId);
         }
 
         void onExit() override
         {
-            LED_Utils::clearPattern(_ringPointPatternId);
-            LED_Utils::disablePattern(_ringPointPatternId);
+            UxModule::LedUtilities::clearPattern(_ringPointPatternId);
+            UxModule::LedUtilities::disablePattern(_ringPointPatternId);
         }
 
         void onTick()
@@ -146,8 +146,8 @@ namespace DisplayModule
             doc["fadeDegrees"] = 20;
             doc["directionDegrees"] = _bearing;
 
-            LED_Utils::configurePattern(_ringPointPatternId, doc);
-            LED_Utils::iteratePattern(_ringPointPatternId);
+            UxModule::LedUtilities::configurePattern(_ringPointPatternId, doc);
+            UxModule::LedUtilities::iteratePattern(_ringPointPatternId);
         }
 
         static std::string formatCalRow(const char* axis, float minVal, float maxVal) {

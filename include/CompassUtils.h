@@ -5,8 +5,8 @@
 #include "LoraUtilities.hpp"
 #include "FilesystemUtils.h"
 #include "RpcUtils.h"
-#include "LED_Utils.h"
-#include "LED_Manager.h"
+#include "LedUtilities.hpp"
+#include "LedManager.hpp"
 #include "FilesystemManager.h"
 #include "Display_Manager.h"
 #include "DisplayManager.hpp"
@@ -100,9 +100,9 @@ public:
 
             if (System_Utils::silentMode == false)
             {
-                LED_Manager::buzzerNotification();
+                UxModule::LedManager::buzzerNotification();
                 // No-op below hardware v3, which has no haptic motor.
-                LED_Manager::applyHapticFeedback(HAPTIC_NOTIFICATION_INTENSITY);
+                UxModule::LedManager::applyHapticFeedback(HAPTIC_NOTIFICATION_INTENSITY);
             }
         }
         #if DEBUG == 1
@@ -314,8 +314,8 @@ public:
                 color = CRGB(red, green, blue);
             }
 
-            LED_Utils::setThemeColor(color);
-            auto interfaceColor = LedPatternInterface::ThemeColor();
+            UxModule::LedUtilities::setThemeColor(color);
+            auto interfaceColor = UxModule::LedPatternInterface::ThemeColor();
             ESP_LOGI(TAG_COMPASS, "LED Interface::ThemeColor: %d, %d, %d", interfaceColor.r, interfaceColor.g, interfaceColor.b);
 
             ESP_LOGD(TAG_COMPASS, "ProcessSettingsFile: Done");

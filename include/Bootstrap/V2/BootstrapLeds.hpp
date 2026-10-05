@@ -4,7 +4,7 @@
 
 #include "LedPatternInterface.hpp"
 #include "LedSegment.hpp"
-#include "LED_Manager.h"
+#include "LedManager.hpp"
 #include "DisplayUtilities.hpp"
 
 // Patterns
@@ -45,28 +45,32 @@ public:
     {
         FastLED.addLeds<LED_TYPE, LED_PIN, LED_ORDER>(LEDBuffer(), NUM_LEDS);
 
-        LED_Utils::registerPattern(&ButtonFlashPattern());
-        LED_Utils::registerPattern(&IlluminateButtonPattern());
-        LED_Utils::registerPattern(&RingPointPattern());
-        LED_Utils::registerPattern(&RingPulsePattern());
-        LED_Utils::registerPattern(&ScrollWheelPattern());
-        LED_Utils::registerPattern(&FlashlightPattern());
+        using UxModule::LedPriority;
+        UxModule::LedUtilities::registerPattern(&ButtonFlashPattern(),      LedPriority::FEEDBACK);
+        UxModule::LedUtilities::registerPattern(&IlluminateButtonPattern(), LedPriority::MODAL);
+        UxModule::LedUtilities::registerPattern(&RingPointPattern(),        LedPriority::BACKGROUND);
+        UxModule::LedUtilities::registerPattern(&RingPulsePattern(),        LedPriority::BACKGROUND);
+        UxModule::LedUtilities::registerPattern(&ScrollWheelPattern(),      LedPriority::BACKGROUND);
+        UxModule::LedUtilities::registerPattern(&FlashlightPattern(),       LedPriority::OVERLAY);
 
-        LED_Manager::init(NUM_LEDS, LEDBuffer(), LED_TASK_CPU_CORE);
+        // Stays enabled; it only claims its LEDs while switched on.
+        UxModule::LedUtilities::enablePattern(UxModule::Flashlight::RegisteredPatternID());
+
+        UxModule::LedManager::init(NUM_LEDS, LEDBuffer(), LED_TASK_CPU_CORE);
 
         // Initialize button flashing animation
 
-        auto buttonFlashPatternID = ButtonFlash::RegisteredPatternID();
-        LED_Utils::enablePattern(buttonFlashPatternID);
-        LED_Utils::setAnimationLengthMS(buttonFlashPatternID, 300);
+        auto buttonFlashPatternID = UxModule::ButtonFlash::RegisteredPatternID();
+        UxModule::LedUtilities::enablePattern(buttonFlashPatternID);
+        UxModule::LedUtilities::setAnimationLengthMS(buttonFlashPatternID, 300);
 
         DisplayModule::Utilities::getInputRaised() += [](const DisplayModule::InputContext &ctx) {
             ESP_LOGI(TAG, "Button flash input: %d", ctx.inputID);
             JsonDocument cfg;
             cfg["inputID"] = ctx.inputID;
-            auto buttonFlashPatternID = ButtonFlash::RegisteredPatternID();
-            LED_Utils::configurePattern(buttonFlashPatternID, cfg);
-            LED_Utils::loopPattern(buttonFlashPatternID, 1);
+            auto buttonFlashPatternID = UxModule::ButtonFlash::RegisteredPatternID();
+            UxModule::LedUtilities::configurePattern(buttonFlashPatternID, cfg);
+            UxModule::LedUtilities::loopPattern(buttonFlashPatternID, 1);
         };
     }
 
@@ -78,22 +82,22 @@ public:
 
 #pragma region LED_Segments
 
-    static LedSegment &CompassRingSegment()
+    static UxModule::LedSegment &CompassRingSegment()
     {
-        static LedSegment compassRing(LEDBuffer(), 0, NUM_COMPASS_LEDS);
+        static UxModule::LedSegment compassRing(LEDBuffer(), 0, NUM_COMPASS_LEDS);
         return compassRing;
     }
 
-    static LedSegment &InputLedSegment()
+    static UxModule::LedSegment &InputLedSegment()
     {
         // Initialize input LEDs in order of InputID
-        static LedSegment inputLeds(LEDBuffer(), {22, 19, 18, 17, 16, 20, 21});
+        static UxModule::LedSegment inputLeds(LEDBuffer(), {22, 19, 18, 17, 16, 20, 21});
         return inputLeds;
     }
 
-    static LedSegment &FlashlightSegment()
+    static UxModule::LedSegment &FlashlightSegment()
     {
-        static LedSegment flashlight(LEDBuffer(), 23, NUM_FLASHLIGHT_LEDS);
+        static UxModule::LedSegment flashlight(LEDBuffer(), 23, NUM_FLASHLIGHT_LEDS);
         return flashlight;
     }
 
@@ -101,9 +105,9 @@ public:
 
 #pragma region LED_Patterns
 
-    static ButtonFlash &ButtonFlashPattern()
+    static UxModule::ButtonFlash &ButtonFlashPattern()
     {
-        static ButtonFlash buttonFlash(
+        static UxModule::ButtonFlash buttonFlash(
             InputLedSegment(), 
             {
                 DisplayModule::InputID::BUTTON_1,
@@ -116,9 +120,9 @@ public:
         return buttonFlash;
     }
 
-    static IlluminateButton &IlluminateButtonPattern()
+    static UxModule::IlluminateButton &IlluminateButtonPattern()
     {
-        static IlluminateButton illuminateButton(
+        static UxModule::IlluminateButton illuminateButton(
             InputLedSegment(), 
             {
                 DisplayModule::InputID::BUTTON_1,
@@ -131,27 +135,27 @@ public:
         return illuminateButton;
     }
 
-    static RingPoint &RingPointPattern()
+    static UxModule::RingPoint &RingPointPattern()
     {
-        static RingPoint ringPoint(CompassRingSegment());
+        static UxModule::RingPoint ringPoint(CompassRingSegment());
         return ringPoint;
     }
 
-    static RingPulse &RingPulsePattern()
+    static UxModule::RingPulse &RingPulsePattern()
     {
-        static RingPulse ringPulse(CompassRingSegment());
+        static UxModule::RingPulse ringPulse(CompassRingSegment());
         return ringPulse;
     }
 
-    static ScrollWheel &ScrollWheelPattern()
+    static UxModule::ScrollWheel &ScrollWheelPattern()
     {
-        static ScrollWheel scrollWheel(CompassRingSegment());
+        static UxModule::ScrollWheel scrollWheel(CompassRingSegment());
         return scrollWheel;
     }
 
-    static Flashlight &FlashlightPattern()
+    static UxModule::Flashlight &FlashlightPattern()
     {
-        static Flashlight flashlight(FlashlightSegment());
+        static UxModule::Flashlight flashlight(FlashlightSegment());
         return flashlight;
     }
 

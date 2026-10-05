@@ -28,7 +28,7 @@ namespace DisplayModule
                 }
                 else if (_requestExitStateCallback)
                 {
-                    LED_Utils::disablePattern(_ringPointId);
+                    UxModule::LedUtilities::disablePattern(_ringPointId);
                     _requestExitStateCallback();
                 }
 
@@ -58,18 +58,18 @@ namespace DisplayModule
                 _cachedPing = WayfinderLoraState::GetUnreadMessage(_userIds[0]);
             }
 
-            _ringPointId = RingPoint::RegisteredPatternID();
+            _ringPointId = UxModule::RingPoint::RegisteredPatternID();
             ESP_LOGI(TAG, "Entering ViewMessageState with ring point ID %d", _ringPointId);
 
             _configureLed();
-            LED_Utils::enablePattern(_ringPointId);
+            UxModule::LedUtilities::enablePattern(_ringPointId);
 
             _rebuildDrawCommands();
         }
 
         void onExit() override
         {
-            LED_Utils::disablePattern(_ringPointId);
+            UxModule::LedUtilities::disablePattern(_ringPointId);
             _userIds.clear();
             _currIndex = 0;
         }
@@ -142,6 +142,16 @@ namespace DisplayModule
 
             double distance = NavigationUtils::GetDistanceTo(_cachedPing->lat, _cachedPing->lng);
 
+            // No fix (GetDistanceTo returns < 0): there is no direction to point
+            // in, and GetHeadingTo's -1 sentinel would otherwise come out of
+            // GetBearing as a legal-looking angle. Dark ring until a fix returns,
+            // same as SavedLocationsState.
+            if (distance < 0)
+            {
+                UxModule::LedUtilities::clearPattern(_ringPointId);
+                return;
+            }
+
             const size_t ledFxMin = 20;
             const size_t ledFxMax = 500;
 
@@ -160,8 +170,8 @@ namespace DisplayModule
             cfg["fadeDegrees"] = fadeDegrees;
             cfg["directionDegrees"] = directionDegrees;
 
-            LED_Utils::configurePattern(_ringPointId, cfg);
-            LED_Utils::iteratePattern(_ringPointId);
+            UxModule::LedUtilities::configurePattern(_ringPointId, cfg);
+            UxModule::LedUtilities::iteratePattern(_ringPointId);
         }
 
         void _rebuildDrawCommands()

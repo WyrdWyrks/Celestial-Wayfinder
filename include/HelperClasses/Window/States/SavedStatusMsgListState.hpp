@@ -7,7 +7,7 @@
 #include "TextDrawCommand.hpp"
 #include "HelperClasses/WayfinderLoraState.hpp"
 #include "HelperClasses/PingMessage.hpp"
-#include "LED_Utils.h"
+#include "LedUtilities.hpp"
 #include "ScrollWheel.hpp"
 
 namespace DisplayModule
@@ -74,15 +74,15 @@ namespace DisplayModule
             }
 
             _pendingAction = PendingAction::None;
-            _scrollWheelID = ScrollWheel::RegisteredPatternID();
-            LED_Utils::enablePattern(_scrollWheelID);
+            _scrollWheelID = UxModule::ScrollWheel::RegisteredPatternID();
+            UxModule::LedUtilities::enablePattern(_scrollWheelID);
 
             _rebuildDrawCommands();
         }
 
         void onExit() override
         {
-            LED_Utils::disablePattern(_scrollWheelID);
+            UxModule::LedUtilities::disablePattern(_scrollWheelID);
             WindowState::onExit();
         }
 
@@ -130,8 +130,8 @@ namespace DisplayModule
                     cfg["numItems"] = count;
                     cfg["currItem"] = std::distance(
                         WayfinderLoraState::SavedMessageListBegin(), _selectedIt);
-                    LED_Utils::configurePattern(_scrollWheelID, cfg);
-                    LED_Utils::iteratePattern(_scrollWheelID);
+                    UxModule::LedUtilities::configurePattern(_scrollWheelID, cfg);
+                    UxModule::LedUtilities::iteratePattern(_scrollWheelID);
                 }
             }
             else
