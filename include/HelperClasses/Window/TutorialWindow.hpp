@@ -9,6 +9,7 @@
 #include "States/EditStringState.hpp"
 #include "States/EditEnumState.hpp"
 #include "States/CompassCalibrateState.hpp"
+#include "HomeWindow.hpp"
 #include "DisplayUtilities.hpp"
 #include "FilesystemUtils.h"
 
@@ -75,6 +76,9 @@ namespace DisplayModule
             calPrompt->bindInput(InputID::BUTTON_4, "Start", [this](const InputContext &) { pushState(_calibrate); });
             calPrompt->bindInput(InputID::BUTTON_2, "Skip", [this](const InputContext &) { _next(); });
 
+            _addPracticeBroadcast();
+            _addPracticeReceive();
+
             _addPage("Broadcasting needs a GPS fix. Until you have one you'll see \"No Location Data\".\n\n"
                      "Head outside with a clear view of the sky and give it a minute.");
 
@@ -98,6 +102,71 @@ namespace DisplayModule
         std::vector<Step>                      _steps;
         size_t                                 _index = 0;
         std::shared_ptr<CompassCalibrateState> _calibrate;
+        std::string                            _practiceLocation;
+
+        // Same location -> message flow as HomeWindow's Broadcast, minus the
+        // GPS-fix requirement and the actual transmit.
+        void _addPracticeBroadcast()
+        {
+            _addPage("Practice a broadcast.\n\n"
+                     "On the home screen, Broadcast shares a location and a short message.\n\n"
+                     "Nothing is actually sent here.");
+
+            auto pickLoc = _addStep(std::make_shared<SelectLocationState>(), []() {
+                StateTransferData d;
+                d.payload = std::make_shared<ArduinoJson::JsonDocument>();
+                auto arr  = (*d.payload)["Locations"].to<ArduinoJson::JsonArray>();
+                auto here = arr.add<ArduinoJson::JsonObject>();
+                here["Name"] = "<Current Location>"; // placeholder coords: practice works without a fix
+                here["Lat"]  = 0.0;
+                here["Lng"]  = 0.0;
+                HomeWindow::AppendSavedLocations(arr);
+                return d;
+            });
+            auto *loc = pickLoc.get(); // raw: the state owns this lambda
+            pickLoc->bindInput(InputID::BUTTON_3, "Back",   [this](const InputContext &) { _back(); });
+            pickLoc->bindInput(InputID::BUTTON_4, "Select", [this, loc](const InputContext &) {
+                auto doc = std::make_shared<ArduinoJson::JsonDocument>();
+                loc->buildSelectPayload(doc);
+                std::string name = (*doc)["Name"] | "";
+                _practiceLocation = (name == "<Current Location>") ? "Ping" : name;
+                _next();
+            });
+
+            auto pickMsg = _addStep(std::make_shared<SelectMessageState>(), [this]() {
+                StateTransferData d;
+                d.payload = std::make_shared<ArduinoJson::JsonDocument>();
+                auto arr  = (*d.payload)["Messages"].to<ArduinoJson::JsonArray>();
+                arr.add(_practiceLocation);
+                HomeWindow::AppendMessageOptions(arr);
+                return d;
+            });
+            pickMsg->bindInput(InputID::BUTTON_3, "Back", [this](const InputContext &) { _back(); });
+            pickMsg->bindInput(InputID::BUTTON_4, "Send", [this](const InputContext &) { _next(); });
+
+            _addPage("Sent! (Not really.)\n\n"
+                     "Anyone nearby would now see your message, and their LEDs would point toward you.");
+        }
+
+        // A canned message from due north, shown on the real message screen.
+        void _addPracticeReceive()
+        {
+            _addPage("Messages from others look like this next one, sent from due north.\n\n"
+                     "Turn around: the LEDs and the line on screen keep pointing at the sender.");
+
+            auto ping = std::make_shared<PingMessage>();
+            ping->sender     = 0xCAFE;
+            ping->senderName = "Wayfinder";
+            ping->status     = "Find me up north!";
+            ping->color_R    = 184; // WyrdWyrks amber
+            ping->color_G    = 74;
+            ping->color_B    = 0;
+
+            auto receive = _addStep(std::make_shared<ViewMessageState>());
+            receive->setPreviewMessage(ping, 250);
+            receive->bindInput(InputID::BUTTON_3, "Back", [this](const InputContext &) { _back(); });
+            receive->bindInput(InputID::BUTTON_4, "Next", [this](const InputContext &) { _next(); });
+        }
 
         template <typename T>
         std::shared_ptr<T> _addStep(std::shared_ptr<T> state, std::function<StateTransferData()> enterData = nullptr)
