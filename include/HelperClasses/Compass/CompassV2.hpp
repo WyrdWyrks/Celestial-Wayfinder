@@ -114,6 +114,39 @@ public:
         ESP_LOGD(TAG_COMPASS_LSM, "Mx: %.2f My: %.2f Mz: %.2f Ax: %.2f Ay: %.2f Az: %.2f", Mx, My, Mz, Ax, Ay, Az);
     }
 
+    void GetRawValues(JsonDocument &doc) override
+    {
+        sensors_event_t magEvent;
+        sensors_event_t accelEvent;
+
+        _CompassMagnetometer.getEvent(&magEvent);
+        _CompassAccelerometer.getEvent(&accelEvent);
+
+        float Mx = magEvent.magnetic.x;
+        float My = magEvent.magnetic.y;
+        float Mz = magEvent.magnetic.z;
+
+        if (_IsCalibrated)
+        {
+            Mx -= (_xMin + _xMax) / 2.0f;
+            My -= (_yMin + _yMax) / 2.0f;
+            Mz -= (_zMin + _zMax) / 2.0f;
+        }
+
+        doc["magMoniker"] = "lis2mdl";
+        doc["accelMoniker"] = "lsm303";
+
+        auto magArr = doc["mag"].to<JsonArray>();
+        magArr.add(Mx);
+        magArr.add(My);
+        magArr.add(Mz);
+
+        auto accelArr = doc["accel"].to<JsonArray>();
+        accelArr.add(accelEvent.acceleration.x);
+        accelArr.add(accelEvent.acceleration.y);
+        accelArr.add(accelEvent.acceleration.z);
+    }
+
     // Calibration methods
     void BeginCalibration()
     {

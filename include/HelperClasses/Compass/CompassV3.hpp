@@ -5,6 +5,7 @@
 #include <math.h>
 #include <unordered_set>
 #include <ArduinoJson.hpp>
+#include "esp_timer.h"
 
 #include "Adafruit_MMC56x3.h"
 #include "DFRobot_BMM350.h"
@@ -123,13 +124,15 @@ public:
         Vector accel;
 
         _GetMagReading(mag);
+        _MagToBoardFrame(mag);
 
         if (!_GetAccelReading(accel))
         {
             return _AzimuthNoCompensation(mag);
         }
 
-        return _HeadingCompensated(mag, accel);
+        _FuseGravity(accel);
+        return _HeadingCompensated(mag, _gravity);
     }
 
     void PrintRawValues() override
@@ -142,6 +145,28 @@ public:
 
         ESP_LOGD(TAG_COMPASS_V3, "Mag reading: x: %f, y: %f, z: %f", mag.x, mag.y, mag.z);
         ESP_LOGD(TAG_COMPASS_V3, "Accel reading: x: %f, y: %f, z: %f", accel.x, accel.y, accel.z);
+    }
+
+    void GetRawValues(JsonDocument &doc) override
+    {
+        Vector mag = {};
+        Vector accel = {};
+
+        _GetMagReading(mag);
+        _GetAccelReading(accel);
+
+        doc["magMoniker"] = _GetMagMoniker();
+        doc["accelMoniker"] = _GetAccelMoniker();
+
+        auto magArr = doc["mag"].to<JsonArray>();
+        magArr.add(mag.x);
+        magArr.add(mag.y);
+        magArr.add(mag.z);
+
+        auto accelArr = doc["accel"].to<JsonArray>();
+        accelArr.add(accel.x);
+        accelArr.add(accel.y);
+        accelArr.add(accel.z);
     }
 
     // ================== Calibration =====================
@@ -261,6 +286,13 @@ private:
 
     bool _IsCalibrated = false;
 
+    // Gravity-vector fusion: unit "up" in the IMU frame, propagated by the gyro
+    // and pulled toward the accelerometer with time constant GRAVITY_TAU_S.
+    static constexpr float GRAVITY_TAU_S = 0.5f;
+    static constexpr int64_t FUSION_RESET_US = 200000; // gap longer than this re-seeds from accel
+    Vector _gravity = {0, 0, 1};
+    int64_t _lastFusionUs = 0;
+
     bool _GetMagReading(Vector &reading)
     {
         if (_magType == MagnetometerV3Type::MMC5603)
@@ -318,6 +350,79 @@ private:
         return true;
     }
 
+    // Angular rate in rad/s, same axes as the accelerometer of the same chip.
+    bool _GetGyroReading(Vector &reading)
+    {
+        if (_imuType == ImuV3Type::BMI323)
+        {
+            if (!_imuBMI323.readGyro(reading.x, reading.y, reading.z))
+            {
+                return false;
+            }
+            reading.x *= DEG_TO_RAD;
+            reading.y *= DEG_TO_RAD;
+            reading.z *= DEG_TO_RAD;
+            return true;
+        }
+        else if (_imuType == ImuV3Type::LSM6DS)
+        {
+            sensors_event_t _, gyro, __;
+            if (!_imuLSM6DS.getEvent(&_, &gyro, &__))
+            {
+                return false;
+            }
+            reading.x = gyro.gyro.x;
+            reading.y = gyro.gyro.y;
+            reading.z = gyro.gyro.z;
+            return true;
+        }
+        return false;
+    }
+
+    // Updates _gravity from the gyro, then nudges it toward the accelerometer.
+    // Hand motion shows up in the accelerometer but barely in the gyro, so the
+    // estimate stays steady while moving and the accel only removes drift. The
+    // accel's pull is scaled down when its magnitude is far from 1 g (shaking).
+    void _FuseGravity(const Vector &accel)
+    {
+        float accelLen = sqrt(_VectorDot(accel, accel));
+        if (accelLen <= 0.0f)
+        {
+            return;
+        }
+        Vector accelUnit = {accel.x / accelLen, accel.y / accelLen, accel.z / accelLen};
+
+        int64_t now = esp_timer_get_time();
+        int64_t elapsedUs = now - _lastFusionUs;
+        _lastFusionUs = now;
+
+        Vector gyro;
+        if (elapsedUs > FUSION_RESET_US || !_GetGyroReading(gyro))
+        {
+            _gravity = accelUnit;
+            return;
+        }
+
+        // A world-fixed vector seen from a frame rotating at w changes by g x w.
+        float dt = elapsedUs / 1000000.0f;
+        Vector rotated;
+        _VectorCross(_gravity, gyro, rotated);
+        _gravity.x += rotated.x * dt;
+        _gravity.y += rotated.y * dt;
+        _gravity.z += rotated.z * dt;
+
+        // BMI323 reports g, LSM6DS reports m/s^2.
+        float oneG = (_imuType == ImuV3Type::LSM6DS) ? SENSORS_GRAVITY_STANDARD : 1.0f;
+        float trust = 1.0f - 5.0f * fabsf(accelLen / oneG - 1.0f);
+        trust = constrain(trust, 0.0f, 1.0f);
+
+        float alpha = trust * dt / (GRAVITY_TAU_S + dt);
+        _gravity.x += alpha * (accelUnit.x - _gravity.x);
+        _gravity.y += alpha * (accelUnit.y - _gravity.y);
+        _gravity.z += alpha * (accelUnit.z - _gravity.z);
+        _VectorNormalize(_gravity);
+    }
+
     void _SetDefaultCalibration()
     {
         if (_magType == MagnetometerV3Type::MMC5603)
@@ -357,6 +462,20 @@ private:
         }
     }
 
+    // Rotates a (hard-iron corrected) mag reading into the board frame the
+    // accelerometer reports in: x forward, y left, z up (measured on a BMI323).
+    // BMM350 reads x forward, y right, z down — a 180° turn about x.
+    // shortcut: MMC5603 and LSM6DS frames are unmeasured, so they keep the old
+    // heading offset; measure them on the compass debug screen and add a case.
+    void _MagToBoardFrame(Vector &mag)
+    {
+        if (_magType == MagnetometerV3Type::BMM350)
+        {
+            mag.y = -mag.y;
+            mag.z = -mag.z;
+        }
+    }
+
     int _AzimuthNoCompensation(Vector &magReading)
     {
         float heading = atan2(magReading.y, magReading.x) * (180.0f / M_PI);
@@ -365,12 +484,18 @@ private:
         {
             heading += 360.0f;
         }
+
+        // In the board frame (see _MagToBoardFrame) atan2(y, x) is already the
+        // compass heading; the mirror below is the old fix for unmapped chips.
+        if (_magType == MagnetometerV3Type::BMM350)
+        {
+            return (int)heading % 360;
+        }
         return (int)(360.0f - heading) % 360;
     }
 
     float _HeadingCompensated(Vector &mag, Vector &accel)
     {
-        Vector from = {1, 0, 0};
         Vector east;
         Vector north;
 
@@ -380,16 +505,14 @@ private:
         _VectorCross(accel, east, north);
         _VectorNormalize(north);
 
-        float heading = atan2(_VectorDot(east, from), _VectorDot(north, from)) * (180.0 / M_PI);
+        // Angle of north around the board (atan2 of its board-plane x/y), not
+        // the compass heading: the two match face-up, but face-down the ring is
+        // viewed from behind, so a true heading would light mirrored LEDs.
+        float heading = atan2(north.y, north.x) * (180.0 / M_PI);
         heading += _AzimuthOffset();
         if (heading < 0)
         {
             heading += 360.0;
-        }
-
-        if (_magType == MagnetometerV3Type::BMM350)
-        {
-            heading = 360.0f - heading;
         }
 
         return heading;
