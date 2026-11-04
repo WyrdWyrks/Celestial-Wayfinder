@@ -31,6 +31,7 @@ extern "C"
 
 #include "HelperClasses/Window/HomeWindow.hpp"
 #include "HelperClasses/Window/CompassWindow.hpp"
+#include "HelperClasses/Window/TutorialWindow.hpp"
 #if HARDWARE_VERSION >= 3
     #include "HelperClasses/Window/BreakoutWindow.hpp"
 #endif
@@ -400,6 +401,11 @@ public:
         _homeWindowInstance = DisplayModule::HomeWindow::create(MainMenuFactory);
 
         DisplayModule::Utilities::pushWindow(_homeWindowInstance);
+
+        if (!DisplayModule::TutorialWindow::isDone())
+        {
+            DisplayModule::Utilities::pushWindow(std::make_shared<DisplayModule::TutorialWindow>());
+        }
     }
 
     static void MainMenuFactory(const DisplayModule::InputContext &ctx)
@@ -446,6 +452,10 @@ public:
         {
             auto diagnosticsWindow = std::make_shared<DisplayModule::DiagnosticsWindow>();
             DisplayModule::Utilities::pushWindow(diagnosticsWindow);
+        }));
+        menuItems.push_back(DisplayModule::MenuItem("Tutorial", []()
+        {
+            DisplayModule::Utilities::pushWindow(std::make_shared<DisplayModule::TutorialWindow>());
         }));
         #if HARDWARE_VERSION >= 3
         menuItems.push_back(DisplayModule::MenuItem("Breakout", []()
