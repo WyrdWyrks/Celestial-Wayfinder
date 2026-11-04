@@ -147,8 +147,8 @@ public:
 
         displayCommandQueue = DisplayModule::Utilities::getDisplayCommandQueue();
 
-        // Initialize UI
-        CompassUtils::InitializeHomeWindow();
+        // Home window is pushed at the end of Bootstrap() once the splash has had its time
+        SplashScreen::show();
 
         RpcModule::Utilities::RegisterRpc("GetDisplayContents", _GetDisplayContentsRpc);
     }

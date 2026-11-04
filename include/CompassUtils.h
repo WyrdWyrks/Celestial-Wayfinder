@@ -32,6 +32,7 @@ extern "C"
 #include "HelperClasses/Window/HomeWindow.hpp"
 #include "HelperClasses/Window/CompassWindow.hpp"
 #include "HelperClasses/Window/TutorialWindow.hpp"
+#include "HelperClasses/SplashScreen.hpp"
 #if HARDWARE_VERSION >= 3
     #include "HelperClasses/Window/BreakoutWindow.hpp"
 #endif

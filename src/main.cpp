@@ -99,5 +99,8 @@ void Bootstrap()
   BootstrapDisplay::Inititalize();
   BootstrapLora::Initialize();
   BootstrapRpc::Initialize();
+
+  SplashScreen::waitMinimum(1000);
+  CompassUtils::InitializeHomeWindow();
 }
 
