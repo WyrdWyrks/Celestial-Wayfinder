@@ -74,13 +74,10 @@ public:
             ESP_LOGI(TAG_COMPASS, "PassMessageReceivedToDisplay: New message received");
             #endif
             
-            // Check if we're on home window
-            if (_homeWindowInstance == DisplayModule::Utilities::activeWindow())
-            {
-                ESP_LOGI(TAG, "Refreshing home window");
-                _homeWindowInstance->onMessageReceived();
-                DisplayModule::Utilities::render();
-            }
+            // This runs on the LoRa task: drawing or touching the window stack
+            // here races the display task, so ask it to tick + render instead
+            // (HomeState::onTick rebuilds the same way onMessageReceived does).
+            DisplayModule::Utilities::sendRefreshCommand();
 
             if (System_Utils::silentMode == false)
             {

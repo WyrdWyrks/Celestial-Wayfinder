@@ -23,13 +23,7 @@
 
 #include <unordered_map>
 
-#if HARDWARE_VERSION == 1
-    #include "Bootstrap/V1/BootstrapMicrocontroller.hpp"
-    #include "Bootstrap/V1/BootstrapLeds.hpp"
-    #include "Bootstrap/V1/BootstrapNavigation.hpp"
-    #include "Bootstrap/V1/BootstrapDisplay.hpp"
-    #include "Bootstrap/V1/BootstrapLora.hpp"
-#elif HARDWARE_VERSION == 2
+#if HARDWARE_VERSION == 2
     #include "Bootstrap/V2/BootstrapMicrocontroller.hpp"
     #include "Bootstrap/V2/BootstrapLeds.hpp"
     #include "Bootstrap/V2/BootstrapNavigation.hpp"

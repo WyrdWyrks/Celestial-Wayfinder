@@ -48,12 +48,11 @@ onto the display command queue.
 
 ## Hardware revisions
 
-The firmware targets three board revisions, selected at compile time via the `HARDWARE_VERSION` macro and
+The firmware targets two board revisions (v1 is no longer supported), selected at compile time via the `HARDWARE_VERSION` macro and
 a matching PlatformIO environment:
 
 | Revision | `HARDWARE_VERSION` | MCU / Board | OLED | Notable hardware |
 |---|---|---|---|---|
-| v1 | `1` | ESP32 (`esp32dev`) | 128×32 SSD1306 | HMC5883 compass |
 | v2 | `2` | ESP32 (`esp32dev`) | 128×64 SSD1306 | 31-LED ring |
 | v3 | `3` | ESP32-**S3** (`esp32-s3-devkitm-1`) | 128×128 SH1107 | BQ25672 PMIC, 61 LEDs, I²C peripheral auto-detect, IMU |
 
@@ -70,15 +69,14 @@ Built with **PlatformIO** using the **ESP-IDF** framework (with the Arduino comp
 # Build & flash a v3 device
 pio run -e hardware-v3 -t upload
 
-# Build for the older ESP32 boards
-pio run -e local-library-v1
+# Build for the older ESP32 board
 pio run -e local-library-v2
 
 # Serial monitor (115200 baud)
 pio device monitor
 ```
 
-Environments are defined in [`platformio.ini`](platformio.ini): `local-library-v1`, `local-library-v2`,
+Environments are defined in [`platformio.ini`](platformio.ini): `local-library-v2`,
 `hardware-v3`, and `hardware-v3-tag-connect`. A pre-build script
 ([`generate_version.py`](generate_version.py)) stamps the firmware version from
 [`version_config.json`](version_config.json) (currently **3.7.8**) into a generated header.
@@ -125,8 +123,8 @@ polls its channels.
 
 ### Bootstrap pattern
 
-Each subsystem has a per-revision bootstrap class under [`include/Bootstrap/`](include/Bootstrap) (`V1`,
-`V2`, `V3`, plus `Common`). They are static classes whose hardware instances are Meyers singletons
+Each subsystem has a per-revision bootstrap class under [`include/Bootstrap/`](include/Bootstrap) (`V2`,
+`V3`, plus `Common`). They are static classes whose hardware instances are Meyers singletons
 (`static T& Foo()`), so a board's entire pinout and peripheral wiring lives in one header.
 [`main.cpp`](src/main.cpp) `#include`s the correct set and calls each `Initialize()` in dependency order.
 
@@ -189,7 +187,7 @@ power savings — dropping the CPU to 80 MHz and cutting LED power — restoring
 ```
 Celestial-Wayfinder/
 ├── include/
-│   ├── Bootstrap/              # Per-revision hardware wiring (Common, V1, V2, V3)
+│   ├── Bootstrap/              # Per-revision hardware wiring (Common, V2, V3)
 │   ├── HelperClasses/
 │   │   ├── Compass/            # CompassV1/V2/V3 (CompassInterface implementations)
 │   │   ├── LoRaDriver/         # ArduinoLoRaDriver (LoraDriverInterface)
@@ -202,9 +200,9 @@ Celestial-Wayfinder/
 │   ├── EventDeclarations.h     # Input ISRs, shared task/queue handles
 │   └── globalDefines.h         # Per-revision pin maps & build constants
 ├── src/                        # main.cpp, CompassUtils.cpp, EventDeclarations.cpp
-├── platformio.ini              # Build environments (v1, v2, v3, v3-tag-connect)
+├── platformio.ini              # Build environments (v2, v3, v3-tag-connect)
 ├── version_config.json         # Firmware version source (→ generate_version.py)
-└── partition_table.csv         # Custom flash partition layout
+└── partition_table_v2_plus.csv # Custom flash partition layout
 ```
 
 ---
