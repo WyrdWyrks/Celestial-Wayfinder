@@ -137,41 +137,7 @@ void IRAM_ATTR encButtonISR()
 //     }
 // }
 
-#if HARDWARE_VERSION == 1
-
-void IRAM_ATTR enc_cb(void *arg)
-{
-    static int64_t prevCount = 0;
-    static TickType_t lastISRTime = 0;
-
-    ESP32Encoder *enc = ESP32Encoder::encoders[0];
-    int64_t currCount = enc->getCount();
-
-    if (currCount % 2 != 0) { return; }
-
-    if (xTaskGetTickCount() - lastISRTime < DEBOUNCE_TIME_ENC) { return; }
-    lastISRTime = xTaskGetTickCount();
-
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    DisplayModule::DisplayCommandQueueItem command;
-    command.commandType = DisplayModule::CommandType::INPUT_COMMAND;
-
-    if (currCount > prevCount)
-    {
-        command.commandData.inputCommand.inputID = DisplayModule::InputID::ENC_DOWN;
-    }
-    else if (currCount < prevCount)
-    {
-        command.commandData.inputCommand.inputID = DisplayModule::InputID::ENC_UP;
-    }
-    else { return; }
-
-    prevCount = currCount;
-    xQueueSendFromISR(displayCommandQueue, &command, &xHigherPriorityTaskWoken);
-    if (xHigherPriorityTaskWoken) { portYIELD_FROM_ISR(); }
-}
-
-#elif HARDWARE_VERSION == 2
+#if HARDWARE_VERSION == 2
 
 void IRAM_ATTR enc_cb(void *arg)
 {

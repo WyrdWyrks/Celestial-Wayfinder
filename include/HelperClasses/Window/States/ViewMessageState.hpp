@@ -47,13 +47,22 @@ namespace DisplayModule
             });
         }
 
+        // Preview mode: shows only this message, pointing at true north from
+        // a fixed distance, and never reads or writes WayfinderLoraState.
+        // Used by the tutorial so practice messages can't leak into real state.
+        void setPreviewMessage(std::shared_ptr<PingMessage> ping, int distanceMeters)
+        {
+            _preview         = std::move(ping);
+            _previewDistance = distanceMeters;
+        }
+
         void onEnter(const StateTransferData &data) override
         {
-            _userIds   = WayfinderLoraState::GetUnreadUserIds();
+            _userIds   = _preview ? std::vector<uint32_t>{ _preview->sender } : WayfinderLoraState::GetUnreadUserIds();
             _currIndex = 0;
-            _cachedPing = nullptr;
+            _cachedPing = _preview;
 
-            if (!_userIds.empty())
+            if (!_preview && !_userIds.empty())
             {
                 _cachedPing = WayfinderLoraState::GetUnreadMessage(_userIds[0]);
             }
@@ -83,7 +92,7 @@ namespace DisplayModule
         {
             // Non-blocking cache refresh — keeps renders fast at 15 ms interval.
             // Falls back to cached value if the LoRa task holds the mutex.
-            if (_currIndex < _userIds.size())
+            if (!_preview && _currIndex < _userIds.size())
             {
                 auto fresh = WayfinderLoraState::TryGetUnreadMessage(_userIds[_currIndex]);
                 if (fresh) { _cachedPing = fresh; }
@@ -103,7 +112,7 @@ namespace DisplayModule
         // refreshes the cache. Returns true if more unread messages remain.
         bool markCurrentRead()
         {
-            if (_userIds.empty()) { return false; }
+            if (_preview || _userIds.empty()) { return false; }
 
             WayfinderLoraState::MarkRead(_userIds[_currIndex]);
             _userIds.erase(_userIds.begin() + _currIndex);
@@ -127,6 +136,9 @@ namespace DisplayModule
         int _ringPointId = -1;
         std::function<void()> _requestExitStateCallback;
 
+        std::shared_ptr<PingMessage> _preview;
+        int _previewDistance = 0;
+
         const uint8_t _LARGE_DISPLAY_MIN_LINES = 16;
         const uint8_t _MED_DISPLAY_MIN_LINES = 8;
         const uint8_t _MIN_DISPLAY_MIN_LINES = 4;
@@ -140,7 +152,7 @@ namespace DisplayModule
             cfg["gOverride"] = _cachedPing->color_G;
             cfg["bOverride"] = _cachedPing->color_B;
 
-            double distance = NavigationUtils::GetDistanceTo(_cachedPing->lat, _cachedPing->lng);
+            double distance = _getMessageDistance();
 
             const size_t ledFxMin = 20;
             const size_t ledFxMax = 500;
@@ -364,7 +376,7 @@ namespace DisplayModule
         {
             if (!_cachedPing) { return 0; }
 
-            double heading = NavigationUtils::GetHeadingTo(_cachedPing->lat, _cachedPing->lng);
+            double heading = _preview ? 0.0 : NavigationUtils::GetHeadingTo(_cachedPing->lat, _cachedPing->lng);
             auto bearing = NavigationUtils::GetBearing(heading);
 
             ESP_LOGI(TAG, "Current Heading: %d, Message Heading: %.4f, Bearing: %f ", NavigationUtils::GetAzimuth(), heading, bearing);
@@ -381,6 +393,7 @@ namespace DisplayModule
         int _getMessageDistance()
         {
             if (!_cachedPing) { return 0; }
+            if (_preview) { return _previewDistance; }
             double distance = NavigationUtils::GetDistanceTo(_cachedPing->lat, _cachedPing->lng);
             return static_cast<int>(distance);
         }

@@ -125,14 +125,15 @@ public:
             Charger().setSdrvControl(BQ25672::SdrvCtrl::ShipMode);
         };
 
+        // TODO: use esp-idf equivalent clock functions. Arduino causes a crash sometimes
         System_Utils::getEnablePowerSavings() += []()
         {
-            setCpuFrequencyMhz(80);
+            // setCpuFrequencyMhz(80);
         };
 
         System_Utils::getDisablePowerSavings() += []()
         {
-            setCpuFrequencyMhz(240);
+            // setCpuFrequencyMhz(240);
         };
 
         System_Utils::registerBatteryCallback([]() -> long {

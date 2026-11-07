@@ -110,12 +110,40 @@ namespace DisplayModule
             JsonDocument calibrationData;
             NavigationUtils::GetCalibrationData(calibrationData);
 
-            std::string magMoniker = "Mag: " + std::string(calibrationData["magMoniker"] | "unknown");
+            JsonDocument rawData;
+            NavigationUtils::GetRawValues(rawData);
+
+            std::string magMoniker = "Mag: " + std::string(rawData["magMoniker"] | "unknown");
             displayLine++;
             addDrawCommand(std::make_shared<TextDrawCommand>(
                 magMoniker,
                 TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
             ));
+
+            std::string accelMoniker = "Accel: " + std::string(rawData["accelMoniker"] | "unknown");
+            displayLine++;
+            addDrawCommand(std::make_shared<TextDrawCommand>(
+                accelMoniker,
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
+            ));
+
+            displayLine++;
+            addDrawCommand(std::make_shared<TextDrawCommand>(
+                formatRawRow("M", rawData["mag"]),
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
+            ));
+
+            displayLine++;
+            addDrawCommand(std::make_shared<TextDrawCommand>(
+                formatRawRow("A", rawData["accel"]),
+                TextFormat{ TextAlignH::CENTER, TextAlignV::LINE, static_cast<uint8_t>(displayLine) }
+            ));
+
+            // The 128x64 V2 screen has no room left for calibration rows.
+            if (displayLine + 3 > displayLines)
+            {
+                return;
+            }
 
             std::string xCalStr = formatCalRow("X", calibrationData["xMin"].as<float>(), calibrationData["xMax"].as<float>());
             displayLine++;
@@ -148,6 +176,13 @@ namespace DisplayModule
 
             LED_Utils::configurePattern(_ringPointPatternId, doc);
             LED_Utils::iteratePattern(_ringPointPatternId);
+        }
+
+        static std::string formatRawRow(const char* label, JsonVariantConst xyz) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%s%6.1f%6.1f%6.1f", label,
+                     xyz[0].as<float>(), xyz[1].as<float>(), xyz[2].as<float>());
+            return std::string(buf);
         }
 
         static std::string formatCalRow(const char* axis, float minVal, float maxVal) {

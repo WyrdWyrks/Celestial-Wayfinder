@@ -109,6 +109,39 @@ namespace DisplayModule
             // TODO: Logic to dynamically update message list
         }
 
+        // Saved locations, in the shape SelectLocationState expects.
+        // Shared with the tutorial's practice broadcast.
+        static void AppendSavedLocations(ArduinoJson::JsonArray arr)
+        {
+            for (auto it = NavigationUtils::GetSavedLocationsBegin();
+                it != NavigationUtils::GetSavedLocationsEnd(); ++it)
+            {
+                JsonObject locObj = arr.add<ArduinoJson::JsonObject>();
+                locObj["Name"] = it->Name;
+                locObj["Lat"] = it->Latitude;
+                locObj["Lng"] = it->Longitude;
+            }
+        }
+
+        // Saved messages followed by @-mentions, as SelectMessageState lists them.
+        static void AppendMessageOptions(ArduinoJson::JsonArray arr)
+        {
+            for (auto it = WayfinderLoraState::SavedMessageListBegin();
+                 it != WayfinderLoraState::SavedMessageListEnd(); ++it)
+            {
+                arr.add(*it);
+            }
+
+            // @-mentions for everyone we've heard from since power-on, tagged
+            // the same way their messages are displayed ("@UserA#BEEF").
+            // Appended last so the saved-message ordering people are used to
+            // doesn't shift, and one scroll up from the top lands on the newest.
+            for (const auto &name : WayfinderLoraState::GetEncounteredSenderNames())
+            {
+                arr.add("@" + name);
+            }
+        }
+
     private:
         std::shared_ptr<HomeState>             _homeState;
         std::shared_ptr<LockState>             _lockState;
@@ -518,14 +551,7 @@ namespace DisplayModule
             currentLoc["Lat"] = myLat;
             currentLoc["Lng"] = myLon;
 
-            for (auto it = NavigationUtils::GetSavedLocationsBegin();
-                it != NavigationUtils::GetSavedLocationsEnd(); ++it)
-            {
-                JsonObject locObj = arr.add<ArduinoJson::JsonObject>();
-                locObj["Name"] = it->Name;
-                locObj["Lat"] = it->Latitude;
-                locObj["Lng"] = it->Longitude;
-            }
+            AppendSavedLocations(arr);
 
             StateTransferData d;
             d.inputID = ctx.inputID;
@@ -546,20 +572,7 @@ namespace DisplayModule
                 arr.add(preselectPayload->operator[]("Name").as<std::string>());
             }
 
-            for (auto it = WayfinderLoraState::SavedMessageListBegin();
-                 it != WayfinderLoraState::SavedMessageListEnd(); ++it)
-            {
-                arr.add(*it);
-            }
-
-            // @-mentions for everyone we've heard from since power-on, tagged
-            // the same way their messages are displayed ("@UserA#BEEF").
-            // Appended last so the saved-message ordering people are used to
-            // doesn't shift, and one scroll up from the top lands on the newest.
-            for (const auto &name : WayfinderLoraState::GetEncounteredSenderNames())
-            {
-                arr.add("@" + name);
-            }
+            AppendMessageOptions(arr);
 
             StateTransferData d;
             d.inputID = ctx.inputID;

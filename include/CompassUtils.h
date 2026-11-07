@@ -31,6 +31,8 @@ extern "C"
 
 #include "HelperClasses/Window/HomeWindow.hpp"
 #include "HelperClasses/Window/CompassWindow.hpp"
+#include "HelperClasses/Window/TutorialWindow.hpp"
+#include "HelperClasses/SplashScreen.hpp"
 #if HARDWARE_VERSION >= 3
     #include "HelperClasses/Window/BreakoutWindow.hpp"
 #endif
@@ -74,13 +76,10 @@ public:
             ESP_LOGI(TAG_COMPASS, "PassMessageReceivedToDisplay: New message received");
             #endif
             
-            // Check if we're on home window
-            if (_homeWindowInstance == DisplayModule::Utilities::activeWindow())
-            {
-                ESP_LOGI(TAG, "Refreshing home window");
-                _homeWindowInstance->onMessageReceived();
-                DisplayModule::Utilities::render();
-            }
+            // This runs on the LoRa task: drawing or touching the window stack
+            // here races the display task, so ask it to tick + render instead
+            // (HomeState::onTick rebuilds the same way onMessageReceived does).
+            DisplayModule::Utilities::sendRefreshCommand();
 
             if (System_Utils::silentMode == false)
             {
@@ -211,8 +210,11 @@ public:
         auto userName = std::make_shared<FilesystemModule::StringSetting>("User Name", "User", 12);
         settings.push_back(userName);
 
-        auto deviceName = std::make_shared<FilesystemModule::StringSetting>("Device Name", defaultDeviceName, 20);
-        settings.push_back(deviceName);
+        // Fixed per-device name derived from DeviceInfo rather than a user
+        // setting: it's the BLE advertised name and the WiFi AP SSID, and
+        // keeping the "Wayfinder_" prefix keeps the device findable.
+        System_Utils::DeviceName = defaultDeviceName;
+        BluetoothModule::detail::DeviceName() = defaultDeviceName;
 
         std::vector<std::string> colorThemeOptions = {"Custom", "Red", "Green", "Blue", "Purple", "Yellow", "Cyan", "White", "Orange"};
         std::vector<int> colorThemeValues = {0, 1, 2, 3, 4, 5, 6, 7, 8};
@@ -403,6 +405,11 @@ public:
         _homeWindowInstance = DisplayModule::HomeWindow::create(MainMenuFactory);
 
         DisplayModule::Utilities::pushWindow(_homeWindowInstance);
+
+        if (!DisplayModule::TutorialWindow::isDone())
+        {
+            DisplayModule::Utilities::pushWindow(std::make_shared<DisplayModule::TutorialWindow>());
+        }
     }
 
     static void MainMenuFactory(const DisplayModule::InputContext &ctx)
@@ -449,6 +456,10 @@ public:
         {
             auto diagnosticsWindow = std::make_shared<DisplayModule::DiagnosticsWindow>();
             DisplayModule::Utilities::pushWindow(diagnosticsWindow);
+        }));
+        menuItems.push_back(DisplayModule::MenuItem("Tutorial", []()
+        {
+            DisplayModule::Utilities::pushWindow(std::make_shared<DisplayModule::TutorialWindow>());
         }));
         #if HARDWARE_VERSION >= 3
         menuItems.push_back(DisplayModule::MenuItem("Breakout", []()
